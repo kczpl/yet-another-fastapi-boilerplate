@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="{{ language|default('pl') }}">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+    <title>{{ subject }}</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            line-height: 1.4;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .logo {
+            margin-bottom: 20px;
+        }
+
+        .logo-img {
+            display: block;
+            max-width: 140px !important;
+            height: auto;
+        }
+
+        h2 {
+            font-size: 20px;
+            color: #1a1a1a;
+            margin: 0 0 12px 0;
+            font-weight: 600;
+        }
+
+        .content {
+            font-size: 15px;
+            color: #374151;
+            margin: 0 0 20px 0;
+            line-height: 1.5;
+        }
+
+        .content p {
+            margin: 0;
+        }
+
+        .footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e7eb;
+            color: #9ca3af;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .login-button {
+            display: inline-block;
+            background-color: #1a1a1a;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 11px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 15px;
+            margin: 0 0 20px 0;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .login-button:hover {
+            background-color: #333333;
+        }
+
+        .greetings {
+            margin: 20px 0 0 0;
+            text-align: left;
+            font-size: 15px;
+            color: #1a1a1a;
+        }
+
+        .greetings p {
+            margin: 0;
+            line-height: 1.3;
+        }
+
+        .security-note {
+            margin: 0 0 20px 0;
+            padding: 10px 12px;
+            background-color: #f9fafb;
+            border-left: 3px solid #6b7280;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #4b5563;
+            line-height: 1.4;
+        }
+
+        .security-note strong {
+            color: #374151;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 16px;
+            }
+
+            .login-button {
+                width: 100%;
+                text-align: center;
+                box-sizing: border-box;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <!-- Logo -->
+        <div class="logo">
+            <img src="https://myapp.com/uploads/logo.png" alt="myapp"
+                class="logo-img" width="140">
+        </div>
+
+        <!-- Main content -->
+        {% if language == 'en' %}
+        <h2>Sign in to myapp</h2>
+        <div class="content">
+            <p>Click the button below to securely sign in to your myapp account. This link will expire in 15 minutes for your security.</p>
+        </div>
+        {% else %}
+        <h2>Zaloguj się do myapp</h2>
+        <div class="content">
+            <p>Kliknij przycisk poniżej, aby bezpiecznie zalogować się do swojego konta myapp. Ten link wygaśnie za 15 minut ze względów bezpieczeństwa.</p>
+        </div>
+        {% endif %}
+
+        <!-- Login Button -->
+        <a href="{{ magic_link_url }}" class="login-button">
+            {% if language == 'en' %}
+            Sign In to myapp
+            {% else %}
+            Zaloguj się do myapp
+            {% endif %}
+        </a>
+
+        <!-- Security note -->
+        <div class="security-note">
+            {% if language == 'en' %}
+            <strong>Security reminder:</strong> If you didn't request this login link, please ignore this email. The link will expire automatically.
+            {% else %}
+            <strong>Przypomnienie o bezpieczeństwie:</strong> Jeśli nie prosiłeś o ten link logowania, zignoruj ten e-mail. Link wygaśnie automatycznie.
+            {% endif %}
+        </div>
+
+        <!-- Greetings -->
+        <div class="greetings">
+            {% if language == 'en' %}
+            <p>Best regards,<br>
+            myapp Team</p>
+            {% else %}
+            <p>Z poważaniem,<br>
+            Zespół myapp</p>
+            {% endif %}
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            Powered by <strong>myapp</strong>
+            <div class="unsubscribe">
+                <a href="https://myapp.com/unsubscribe">Manage email preferences</a>
+            </div>
+        </div>
+</body>
+
+</html>

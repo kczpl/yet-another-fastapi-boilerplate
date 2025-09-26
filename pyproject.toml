@@ -1,0 +1,45 @@
+[project]
+name = "backend-app"
+version = "0.0.1"
+description = "Backend app"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.115.12",
+    "pydantic-ai>=0.2.4",
+    "sentry-sdk[fastapi,sqlalchemy]>=2.31.0",
+    "structlog>=25.4.0",
+    "psycopg[binary]>=3.2.9",
+    "sqlalchemy>=2.0.41",
+    "cryptography>=45.0.5",
+    "jinja2>=3.1.6",
+    "alembic>=1.16.3",
+    "asgi-correlation-id>=4.3.4",
+    "python-jose[cryptography]>=3.3.0",
+    "python-multipart>=0.0.9",
+    "pgqueuer[sentry]>=0.24.2",
+    "asyncpg>=0.30.0",
+    "httpx>=0.24.0",
+    "greenlet>=3.2.4",
+]
+
+[dependency-groups]
+dev = [
+    "faker>=37.4.0",
+    "fastapi[standard]",
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.1.0",
+    "pytest-mock>=3.14.1",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
+    "ignore:datetime.datetime.utcnow\\(\\) is deprecated:DeprecationWarning:botocore",
+    "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
+]
