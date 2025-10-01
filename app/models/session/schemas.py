@@ -1,4 +1,5 @@
 from app.models.base.schemas import Base
+from pydantic import EmailStr, Field
 
 
 ################################################################################
@@ -7,7 +8,7 @@ from app.models.base.schemas import Base
 
 
 class LoginRequest(Base):
-    email: str
+    email: EmailStr = Field(max_length=254, description="Valid email address")
 
 
 ################################################################################
@@ -16,7 +17,7 @@ class LoginRequest(Base):
 
 
 class MagicLinkVerifyRequest(Base):
-    token: str
+    token: str = Field(min_length=1, max_length=1000, description="Magic link token")
 
 
 ################################################################################
@@ -36,8 +37,8 @@ class TokenResponse(Base):
 
 
 class LogoutRequest(Base):
-    refresh_token: str
-    access_token: str | None = None
+    refresh_token: str = Field(min_length=1, max_length=1000, description="JWT refresh token")
+    access_token: str | None = Field(None, max_length=1000, description="JWT access token")
 
 
 ################################################################################
@@ -46,7 +47,7 @@ class LogoutRequest(Base):
 
 
 class RefreshRequest(Base):
-    refresh_token: str
+    refresh_token: str = Field(min_length=1, max_length=1000, description="JWT refresh token")
 
 
 class RefreshAccessTokenResponse(Base):

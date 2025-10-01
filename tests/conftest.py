@@ -3,9 +3,10 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from fastapi import HTTPException, FastAPI
-from fastapi.testclient import TestClient
+from httpx import AsyncClient, ASGITransport
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from pytest_mock import MockerFixture
@@ -57,10 +58,9 @@ from app.main import app  # noqa: E402
 app.router.lifespan_context = mock_lifespan
 
 from app.core.db import get_db, Base  # noqa: E402
-from app.core.auth import get_current_user  # noqa: E402
-from app.core.pgqueuer_producer import get_queue  # noqa: E402
-from app.schemas.user import CurrentUser  # noqa: E402
-from app.models.user import User  # noqa: E402
+from app.models.user.dependencies import auth_user  # noqa: E402
+from app.models.user.schemas import CurrentUser  # noqa: E402
+from app.models.user.models import User  # noqa: E402
 
 TEST_DATABASE_URL = "postgresql+psycopg://postgres:postgres@127.0.0.1:5433/postgres?sslmode=disable"
 TEST_JWT_SECRET_KEY = "test-jwt-secret-key"
@@ -108,8 +108,8 @@ def test_session(test_engine):
 
 
 @pytest.fixture(scope="function")
-def client(test_session, mock_sync_queries):
-    """Create a test client with database session override.
+async def client(test_session, mock_sync_queries) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async test client with database session override.
 
     Overrides the FastAPI dependency to use our test database session
     instead of the production database connection.
@@ -122,18 +122,13 @@ def client(test_session, mock_sync_queries):
         finally:
             pass
 
-    def override_get_queue():
-        # return our mock queue instead of creating a real one
-        return mock_sync_queries
-
-    def mock_get_current_user():
+    def mock_auth_user():
         # try to find the mock user in the database first
         user = test_session.query(User).filter(User.id == MOCK_USER_ID).first()
         if user:
             return CurrentUser(
                 id=str(user.id),
                 email=user.email,
-                organization_id=user.organization_id,
                 role=user.role,
                 is_active=user.is_active,
                 created_at=user.created_at,
@@ -143,10 +138,12 @@ def client(test_session, mock_sync_queries):
 
     # override the FastAPI dependency injection
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_queue] = override_get_queue
-    app.dependency_overrides[get_current_user] = mock_get_current_user
+    app.dependency_overrides[auth_user] = mock_auth_user
 
-    with TestClient(app) as test_client:
+    host, port = "127.0.0.1", "9000"
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=(host, port)), base_url="http://test"
+    ) as test_client:
         yield test_client
 
     # clean up dependency overrides after test
@@ -154,8 +151,8 @@ def client(test_session, mock_sync_queries):
 
 
 @pytest.fixture(scope="function")
-def unauthorized_client(test_session, mock_sync_queries):
-    """Create a test client without auth override - tests unauthorized access."""
+async def unauthorized_client(test_session, mock_sync_queries) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async test client without auth override - tests unauthorized access."""
 
     def override_get_db():
         try:
@@ -163,15 +160,13 @@ def unauthorized_client(test_session, mock_sync_queries):
         finally:
             pass
 
-    def override_get_queue():
-        # return our mock queue instead of creating a real one
-        return mock_sync_queries
-
-    # only override database and queue, not auth
+    # only override database, not auth
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_queue] = override_get_queue
 
-    with TestClient(app) as test_client:
+    host, port = "127.0.0.1", "9000"
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=(host, port)), base_url="http://test"
+    ) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()

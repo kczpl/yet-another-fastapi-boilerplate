@@ -2,14 +2,16 @@ import sentry_sdk
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
 # from sentry_sdk.integrations.logging import LoggingIntegration
 from app.core.config import config
-
-SENTRY_DSN = "https://f518e599ce73bc37ce1b0623f14f7156@o4509554782175232.ingest.de.sentry.io/4509554784600144"
 
 
 def init_sentry():
     if config.ENVIRONMENT not in ["production", "staging"]:
+        return
+
+    if not config.SENTRY_DSN:
         return
 
     # environment-specific settings
@@ -29,7 +31,7 @@ def init_sentry():
         include_local_variables = False  # reduce PII risk in staging
 
     sentry_sdk.init(
-        dsn=SENTRY_DSN,
+        dsn=config.SENTRY_DSN,
         environment=config.ENVIRONMENT,
         release=f"backend@{config.VERSION}",
         # error sampling #

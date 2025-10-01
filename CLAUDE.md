@@ -1,15 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Development Commands
 
 ### Environment Setup
 ```bash
-# Initialize virtual environment
 uv venv .venv
-
-# Activate virtual environment
 source .venv/bin/activate
 
 # Install dependencies
@@ -28,7 +23,7 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 # Run background workers
 just workers
-# OR 
+# OR
 uv run pgq run app.workers.main:main --restart-on-failure
 
 # Run with Docker Compose (includes postgres)
@@ -39,17 +34,14 @@ docker compose up
 
 ### Testing
 ```bash
-# Run all tests
+# run all tests
 uv run pytest
 
-# Run tests with verbose output
+# run tests with verbose output
 uv run pytest -v
 
-# Run specific test file
+# run specific test file
 uv run pytest tests/test_specific.py
-
-# Run tests with coverage
-uv run pytest --cov=app
 ```
 
 ### Code Quality
@@ -66,23 +58,6 @@ uv run ruff check
 uv run ruff check --fix
 ```
 
-### Database Operations
-```bash
-# Run Alembic migrations
-uv run alembic upgrade head
-
-# Check current migration status
-uv run alembic current
-
-# View migration history
-uv run alembic history
-
-# Create new migration
-uv run alembic revision --autogenerate -m "description"
-
-# Install PGQueuer database extensions
-python scripts/pgq.py
-```
 
 ## Architecture Overview
 
@@ -99,7 +74,6 @@ This is a modern FastAPI application using the following architectural patterns:
 
 **Configuration Management (`app/core/config.py`)**:
 - Environment-specific config loading (development, staging, production)
-- AWS Secrets Manager integration for production secrets
 - Pydantic settings validation
 
 **Database Layer**:
@@ -131,6 +105,10 @@ app/
 ├── core/          # Core functionality (config, db, logging, etc.)
 ├── models/        # Database models, schemas, and domain logic
 │   ├── user/      # User domain (models, schemas, dependencies)
+│   │       ├── dependencies.py # Dependency injection functions
+│   │       ├── functions.py    # Reusable function on domain, like create_user, find_user_by_id
+│   │       ├── models.py       # SQLAlachemy model
+│   │       └── schemas.py      # Pydantic schemas and dataclasses
 │   └── session/   # Session domain
 ├── services/      # Business logic services
 ├── utils/         # Utility functions and helpers
@@ -138,14 +116,15 @@ app/
 ```
 
 ### Testing Strategy
-- Comprehensive test setup with database fixtures
+- Comprehensive test setup with database fixtures using @fixtures in /fixtures folder
 - Mock implementations for external services (pgQueuer, rate limiter)
+- Mocks are done this way: `mocker.patch("app.utils.communications.sms.get_twilio_client")` (no decorators)
 - Separate test database with automatic cleanup
 - Dependency override patterns for isolating tests
 
 ### Environment Configuration
 - Development: Uses `.env` file for local configuration
-- Staging/Production: AWS Secrets Manager for secure credential management
+- Staging/Production: Environment variables or secret managers
 - Environment-specific domains and settings via `_add_non_secret_variables()`
 
 ## Important Notes
@@ -155,41 +134,37 @@ app/
 - Uses pgQueuer for background job processing (requires PostgreSQL extensions)
 - Test database runs on port 5433 (configured in docker-compose.yml)
 
-### Dependencies
-- Built with Python 3.13+
-- Uses `uv` for dependency management (modern pip replacement)
-- FastAPI with standard extras for full web server capabilities
-- Pydantic AI integration for AI agent functionality
-
 ### Development Workflow
 - Use `justfile` commands for common development tasks
+- `justfile` is like Makefile - a place to automate certain commands
 - Code formatting enforced with ruff (line length: 120)
 - Tests use pytest with asyncio support
 - Background workers run separately from the main API process
 
-### Docker & Deployment
-- Multi-stage Docker builds for API and worker processes
-- AWS ECS deployment with separate services for API and workers
-- ECR for container registry
-- Environment-specific deployment configurations
-
 ---
+
+# FastAPI best practices to follow
 
 ## Async Routes
 FastAPI is an async framework, in the first place. It is designed to work with async I/O operations and that is the reason it is so fast.
+However, FastAPI doesn't restrict you to use only `async` routes, and the developer can use `sync` routes as well.
 
-However, FastAPI doesn't restrict you to use only `async` routes, and the developer can use `sync` routes as well. This might confuse beginner developers into believing that they are the same, but they are not.
+Always prefer to use non blocking packages like `httpx.AsyncClient` over `requests`.
+
+Same rules applies for endpoint and `Depends` dependency injection:
+`def` -> for blocking operations
+`async` -> for light or non-blocking lopic
 
 ### I/O Intensive Tasks
-Under the hood, FastAPI can [effectively handle](https://fastapi.tiangolo.com/async/#path-operation-functions) both async and sync I/O operations.
-- FastAPI runs `sync` routes in the [threadpool](https://en.wikipedia.org/wiki/Thread_pool)
-and blocking I/O operations won't stop the [event loop](https://docs.python.org/3/library/asyncio-eventloop.html)
-from executing the tasks.
-- If the route is defined `async` then it's called regularly via `await`
-and FastAPI trusts you to do only non-blocking I/O operations.
+Under the hood, FastAPI can effectively handle both async and sync I/O operations.
+
+- FastAPI runs `sync` routes in the threadpool and blocking I/O operations won't stop the event loopfrom executing the tasks.
+
+- If the route is defined `async` then it's called regularly via `await` and FastAPI trusts you to do only non-blocking I/O operations.
 
 The caveat is that if you violate that trust and execute blocking operations within async routes,
 the event loop will not be able to run subsequent tasks until the blocking operation completes.
+
 ```python
 import asyncio
 import time
@@ -222,18 +197,17 @@ async def perfect_ping():
 
 
 ### CPU Intensive Tasks
+
 The second caveat is that operations that are non-blocking awaitables or are sent to the thread pool must be I/O intensive tasks (e.g. open file, db call, external API call).
+
 - Awaiting CPU-intensive tasks (e.g. heavy calculations, data processing, video transcoding) is worthless since the CPU has to work to finish the tasks,
 while I/O operations are external and server does nothing while waiting for that operations to finish, thus it can go to the next tasks.
-- Running CPU-intensive tasks in other threads also isn't effective, because of [GIL](https://realpython.com/python-gil/).
-In short, GIL allows only one thread to work at a time, which makes it useless for CPU tasks.
+
+- Running CPU-intensive tasks in other threads also isn't effective, because of GIL. In short, GIL allows only one thread to work at a time, which makes it useless for CPU tasks.
+
 - If you want to optimize CPU intensive tasks you should send them to workers in another process.
 
-**Related StackOverflow questions of confused users**
-1. https://stackoverflow.com/questions/62976648/architecture-flask-vs-fastapi/70309597#70309597
-   - Here you can also check [my answer](https://stackoverflow.com/a/70309597/6927498)
-2. https://stackoverflow.com/questions/65342833/fastapi-uploadfile-is-slow-compared-to-flask
-3. https://stackoverflow.com/questions/71516140/fastapi-runs-api-calls-in-serial-instead-of-parallel-fashion
+- If you need to process CPU/GPU heavy task consider moving it to background processor instead processing it in API endpoint.
 
 ## Pydantic
 ### Excessively use Pydantic
@@ -241,6 +215,7 @@ Pydantic has a rich set of features to validate and transform data.
 
 In addition to regular features like required & non-required fields with default values,
 Pydantic has built-in comprehensive data processing tools like regex, enums, strings manipulation, emails validation, etc.
+
 ```python
 from enum import Enum
 from pydantic import AnyUrl, BaseModel, EmailStr, Field
@@ -260,8 +235,10 @@ class UserBase(BaseModel):
     favorite_band: MusicBand | None = None  # only "AEROSMITH", "QUEEN", "AC/DC" values are allowed to be inputted
     website: AnyUrl | None = None
 ```
+
 ### Custom Base Model
-Having a controllable global base model allows us to customize all the models within the app. For instance, we can enforce a standard datetime format or introduce a common method for all subclasses of the base model.
+Having a controllable global base model allows us to customize all the models within the app.
+For instance, we can enforce a standard datetime format or introduce a common method for all subclasses of the base model.
 ```python
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -277,9 +254,12 @@ def datetime_to_gmt_str(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
-class CustomModel(BaseModel):
+class Base(BaseModel):
     model_config = ConfigDict(
-        json_encoders={datetime: datetime_to_gmt_str},
+        json_encoders={
+            datetime: datetime_to_gmt_str
+            Decimal: float
+        },
         populate_by_name=True,
     )
 
@@ -291,12 +271,15 @@ class CustomModel(BaseModel):
 
 
 ```
+
 In the example above, we have decided to create a global base model that:
 - Serializes all datetime fields to a standard format with an explicit timezone
 - Provides a method to return a dict with only serializable fields
 
 ### Decouple Pydantic BaseSettings
-BaseSettings was a great innovation for reading environment variables, but having a single BaseSettings for the whole app can become messy over time. To improve maintainability and organization, we have split the BaseSettings across different modules and domains.
+
+BaseSettings was a great innovation for reading environment variables, but having a single BaseSettings for the whole app can become messy over time.
+To improve maintainability and organization, we have split the BaseSettings across different modules and domains.
 ```python
 # src.auth.config
 from datetime import timedelta
@@ -347,9 +330,10 @@ settings = Config()
 ```
 
 ## Dependencies
-### Beyond Dependency Injection
-Pydantic is a great schema validator, but for complex validations that involve calling a database or external services, it is not sufficient.
 
+### Beyond Dependency Injection
+
+Pydantic is a great schema validator, but for complex validations that involve calling a database or external services, it is not sufficient.
 FastAPI documentation mostly presents dependencies as DI for endpoints, but they are also excellent for request validation.
 
 Dependencies can be used to validate data against database constraints (e.g., checking if an email already exists, ensuring a user is found, etc.).
@@ -428,6 +412,7 @@ async def get_user_post(post: dict[str, Any] = Depends(valid_owned_post)):
 
 ```
 ### Decouple & Reuse dependencies. Dependency calls are cached
+
 Dependencies can be reused multiple times, and they won't be recalculated - FastAPI caches dependency's result within a request's scope by default,
 i.e. if `valid_post_id` gets called multiple times in one route, it will be called only once.
 
@@ -502,13 +487,11 @@ async def get_user_post(
 
 ### Prefer `async` dependencies
 FastAPI supports both `sync` and `async` dependencies, and there is a temptation to use `sync` dependencies, when you don't have to await anything, but that might not be the best choice.
-
 Just as with routes, `sync` dependencies are run in the thread pool. And threads here also come with a price and limitations, that are redundant, if you just make a small non-I/O operation.
-
-[See more](https://github.com/Kludex/fastapi-tips?tab=readme-ov-file#9-your-dependencies-may-be-running-on-threads) (external link)
 
 
 ## Miscellaneous
+
 ### Follow the REST
 Developing RESTful API makes it easier to reuse dependencies in routes like these:
    1. `GET /courses/:course_id`
@@ -516,9 +499,11 @@ Developing RESTful API makes it easier to reuse dependencies in routes like thes
    3. `GET /chapters/:chapter_id`
 
 The only caveat is having to use the same variable names in the path:
+
 - If you have two endpoints `GET /profiles/:profile_id` and `GET /creators/:creator_id`
 that both validate whether the given `profile_id` exists,  but `GET /creators/:creator_id`
 also checks if the profile is creator, then it's better to rename `creator_id` path variable to `profile_id` and chain those two dependencies.
+
 ```python
 # src.profiles.dependencies
 async def valid_profile_id(profile_id: UUID4) -> Mapping:
@@ -551,6 +536,7 @@ async def get_user_profile_by_id(
 
 ```
 ### FastAPI response serialization
+
 You may think you can return Pydantic object that matches your route's `response_model` to make some optimizations,
 but you'd be wrong.
 
@@ -585,6 +571,8 @@ async def root():
 [INFO] [2022-08-28 12:00:00.000000] created pydantic model
 [INFO] [2022-08-28 12:00:00.000020] created pydantic model
 ```
+
+DON'T RETURN PYDANTIC MODEL FROM ENDPOINT OR SERVICE - USE `response_model`
 
 ### If you must use sync SDK, then run it in a thread pool.
 If you must use a library to interact with external services, and it's not `async`,
@@ -643,7 +631,6 @@ async def get_creator_posts(profile_data: ProfileCreate):
 ```
 **Response Example:**
 
-<img src="images/value_error_response.png" width="400" height="auto">
 
 ### Docs
 1. Unless your API is public, hide docs by default. Show it explicitly on the selected envs only.
@@ -662,9 +649,11 @@ if ENVIRONMENT not in SHOW_DOCS_ENVIRONMENT:
 
 app = FastAPI(**app_configs)
 ```
+
 2. Help FastAPI to generate an easy-to-understand docs
    1. Set `response_model`, `status_code`, `description`, etc.
    2. If models and statuses vary, use `responses` route attribute to add docs for different responses
+
 ```python
 from fastapi import APIRouter, status
 
@@ -675,28 +664,12 @@ router = APIRouter()
     response_model=DefaultResponseModel,  # default response pydantic model
     status_code=status.HTTP_201_CREATED,  # default status code
     description="Description of the well documented endpoint",
-    tags=["Endpoint Category"],
     summary="Summary of the Endpoint",
-    responses={
-        status.HTTP_200_OK: {
-            "model": OkResponse, # custom pydantic model for 200 response
-            "description": "Ok Response",
-        },
-        status.HTTP_201_CREATED: {
-            "model": CreatedResponse,  # custom pydantic model for 201 response
-            "description": "Creates something from user request",
-        },
-        status.HTTP_202_ACCEPTED: {
-            "model": AcceptedResponse,  # custom pydantic model for 202 response
-            "description": "Accepts request and handles it later",
-        },
-    },
 )
 async def documented_route():
     pass
 ```
-Will generate docs like this:
-![FastAPI Generated Custom Response Docs](images/custom_responses.png "Custom Response Docs")
+
 
 ### Set DB keys naming conventions
 Explicitly setting the indexes' namings according to your database's convention is preferable over sqlalchemy's.
@@ -712,6 +685,7 @@ POSTGRES_INDEXES_NAMING_CONVENTION = {
 }
 metadata = MetaData(naming_convention=POSTGRES_INDEXES_NAMING_CONVENTION)
 ```
+
 ### Migrations. Alembic
 1. Migrations must be static and revertable.
 If your migrations depend on dynamically generated data, then
@@ -722,17 +696,22 @@ make sure the only thing that is dynamic is the data itself, not its structure.
 # alembic.ini
 file_template = %%(year)d-%%(month).2d-%%(day).2d_%%(slug)s
 ```
+
 ### Set DB naming conventions
+
 Being consistent with names is important. Some rules we followed:
 1. lower_case_snake
-2. singular form (e.g. `post`, `post_like`, `user_playlist`)
-3. group similar tables with module prefix, e.g. `payment_account`, `payment_bill`, `post`, `post_like`
+2. plural form of tables (e.g. `posts`, `post_likes`, `user_playlists`)
+3. group similar tables with module prefix, e.g. `payment_accounts`, `payment_bills`, `posts`, `post_likes`
 4. stay consistent across tables, but concrete namings are ok, e.g.
    1. use `profile_id` in all tables, but if some of them need only profiles that are creators, use `creator_id`
    2. use `post_id` for all abstract tables like `post_like`, `post_view`, but use concrete naming in relevant modules like `course_id` in `chapters.course_id`
 5. `_at` suffix for datetime
 6. `_date` suffix for date
+
+
 ### SQL-first. Pydantic-second
+
 - Usually, database handles data processing much faster and cleaner than CPython will ever do.
 - It's preferable to do all the complex joins and simple data manipulations with SQL.
 - It's preferable to aggregate JSONs in DB for responses with nested objects.
@@ -817,7 +796,14 @@ async def get_creator_posts(creator: dict[str, Any] = Depends(valid_creator_id))
 
    return posts
 ```
+
+### Connection pool
+
+Always use connection pool to database and get connection from the pool instead creating new connection.
+
+
 ### Set tests client async from day 0
+
 Writing integration tests with DB will most likely lead to messed up event loop errors in the future.
 Set the async test client immediately, e.g. [httpx](https://github.com/encode/starlette/issues/652)
 ```python
@@ -843,27 +829,16 @@ async def test_create_post(client: TestClient):
 ```
 Unless you have sync db connections (excuse me?) or aren't planning to write integration tests.
 
-### Use ruff
-With linters, you can forget about formatting the code and focus on writing the business logic.
 
-[Ruff](https://github.com/astral-sh/ruff) is "blazingly-fast" new linter that replaces black, autoflake, isort, and supports more than 600 lint rules.
+### Use lifespan
 
-It's a popular good practice to use pre-commit hooks, but just using the script was ok for us.
-```shell
-#!/bin/sh -e
-set -x
+Use `lifespan` to manage resources on startup/shutdown app.
 
-ruff check --fix src
-ruff format src
+```python
+async def lifespan(app):
+    # ... init resources like DB
+    yield
+    # ... close resources
+
+app = FastAPI(lifespan=lifespan)
 ```
-
-## Bonus Section
-Some very kind people shared their own experience and best practices that are definitely worth reading.
-Check them out at [issues](https://github.com/zhanymkanov/fastapi-best-practices/issues) section of the project.
-
-For instance, [lowercase00](https://github.com/zhanymkanov/fastapi-best-practices/issues/4)
-has described in details their best practices working with permissions & auth, class-based services & views,
-task queues, custom response serializers, configuration with dynaconf, etc.
-
-If you have something to share about your experience working with FastAPI, whether it's good or bad,
-you are very welcome to create a new issue. It is our pleasure to read it.

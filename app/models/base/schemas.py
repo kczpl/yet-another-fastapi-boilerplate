@@ -1,11 +1,32 @@
 from typing import Generic, TypeVar, List
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field, ConfigDict
+from fastapi.encoders import jsonable_encoder
 
 T = TypeVar("T")
 
 
+def datetime_to_gmt_str(dt: datetime) -> str:
+    """Convert datetime to standard GMT string format with timezone."""
+    if not dt.tzinfo:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    return dt.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
 class Base(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        json_encoders={
+            datetime: datetime_to_gmt_str,
+        },
+    )
+
+    def serializable_dict(self, **kwargs):
+        """Return a dict which contains only serializable fields."""
+        default_dict = self.model_dump()
+        return jsonable_encoder(default_dict)
 
 
 class PaginationParams(BaseModel):

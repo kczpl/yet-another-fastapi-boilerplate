@@ -2,19 +2,19 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.core.config import config
+from app.core.config import auth_config
 from app.core.exceptions import raise_unauthorized, raise_bad_request
 from app.core.errors import ERRORS
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
 from app.core.logger import log
 from app.models.session.models import TokenBlacklist
+from sqlalchemy.ext.asyncio import AsyncSession
 
-ACCESS_TOKEN_EXPIRE_MINUTES = config.ACCESS_TOKEN_EXPIRE_MINUTES
-REFRESH_TOKEN_EXPIRE_DAYS = config.REFRESH_TOKEN_EXPIRE_DAYS
-MAGIC_LINK_EXPIRE_MINUTES = config.MAGIC_LINK_EXPIRE_MINUTES
-JWT_SECRET_KEY = config.JWT_SECRET_KEY
-JWT_ALGORITHM = config.JWT_ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = auth_config.ACCESS_TOKEN_EXPIRE_MINUTES
+REFRESH_TOKEN_EXPIRE_DAYS = auth_config.REFRESH_TOKEN_EXPIRE_DAYS
+MAGIC_LINK_EXPIRE_MINUTES = auth_config.MAGIC_LINK_EXPIRE_MINUTES
+JWT_SECRET_KEY = auth_config.JWT_SECRET_KEY
+JWT_ALGORITHM = auth_config.JWT_ALGORITHM
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -70,6 +70,29 @@ def verify_token(token: str, expected_type: str = "access") -> dict[str, Any]:
         raise_unauthorized(ERRORS["unauthorized"])
 
 
+async def verify_token_with_blacklist(db, token: str, expected_type: str = "access") -> dict[str, Any]:
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        token_type = payload.get("type")
+        if token_type != expected_type:
+            raise_unauthorized(ERRORS["unauthorized"])
+
+        exp = payload.get("exp")
+        if exp is None:
+            raise_unauthorized(ERRORS["unauthorized"])
+
+        if datetime.now(timezone.utc) > datetime.fromtimestamp(exp, timezone.utc):
+            raise_unauthorized(ERRORS["unauthorized"])
+
+        jti = payload.get("jti")
+        if jti and await is_token_blacklisted(db, jti):
+            raise_unauthorized(ERRORS["unauthorized"])
+
+        return payload
+    except JWTError:
+        raise_unauthorized(ERRORS["unauthorized"])
+
+
 def get_token_jti(token: str) -> str | None:
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
@@ -78,13 +101,14 @@ def get_token_jti(token: str) -> str | None:
         return None
 
 
-def is_token_blacklisted(db: Session, jti: str) -> bool:
-    blacklisted = (
-        db.query(TokenBlacklist)
-        .filter(TokenBlacklist.jti == jti, TokenBlacklist.expires_at > datetime.now(timezone.utc))
-        .first()
+async def is_token_blacklisted(db: AsyncSession, jti: str) -> bool:
+    from sqlalchemy import select
+
+    query = select(TokenBlacklist).where(
+        TokenBlacklist.jti == jti, TokenBlacklist.expires_at > datetime.now(timezone.utc)
     )
-    return blacklisted is not None
+    result = await db.execute(query)
+    return result.scalar_one_or_none() is not None
 
 
 ################################################################################
@@ -114,7 +138,7 @@ def verify_magic_link_token(token: str) -> str:
         return email
 
     except JWTError:
-        log.error("invalid magic link token", token=token)
+        log.error("invalid magic link token")
         raise_bad_request(ERRORS["invalid_magic_link_token"])
 
 

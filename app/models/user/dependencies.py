@@ -21,15 +21,12 @@ async def auth_user(
 
     payload = verify_token(credentials.credentials, expected_type="access")
 
-    # Check if token is blacklisted
     jti = payload.get("jti")
     if jti and await is_token_blacklisted(db, jti):
-        log.warning("attempted use of blacklisted token", jti=jti[:8])
         raise_unauthorized(ERRORS["unauthorized"])
 
     user_id_str = payload.get("sub")
     if not user_id_str:
-        log.error("user ID not found in token payload", payload=payload)
         raise_unauthorized(ERRORS["unauthorized"])
 
     try:
@@ -39,6 +36,7 @@ async def auth_user(
         raise_unauthorized(ERRORS["unauthorized"])
 
     user = await find_active_user_by_id(db, user_id)
+
     scope = sentry_sdk.get_current_scope()
     scope.set_user({"id": str(user.id), "email": user.email})
 

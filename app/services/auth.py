@@ -5,7 +5,7 @@ from app.models.session.schemas import RefreshAccessTokenResponse
 from app.utils.jwt import (
     create_access_token,
     create_refresh_token,
-    verify_token,
+    verify_token_with_blacklist,
     verify_magic_link_token,
     get_token_jti,
 )
@@ -98,7 +98,7 @@ class VerifyMagicLinkService(Service):
 
 class RefreshAccessTokenService(Service):
     async def call(self, refresh_token: str) -> RefreshAccessTokenResponse:
-        payload = verify_token(refresh_token, expected_type="refresh")
+        payload = await verify_token_with_blacklist(self.db, refresh_token, expected_type="refresh")
         user_id = payload.get("sub")
         jti = payload.get("jti")
 
@@ -151,7 +151,7 @@ class LogoutService(Service):
         return True
 
     async def _blacklist_refresh_token(self, refresh_token: str, jti: str) -> None:
-        payload = verify_token(refresh_token, expected_type="refresh")
+        payload = await verify_token_with_blacklist(self.db, refresh_token, expected_type="refresh")
         expires_at = self._get_token_expires_at(payload, timedelta(days=7))
         await blacklist_token(self.db, jti, "refresh", expires_at)
 
@@ -160,7 +160,7 @@ class LogoutService(Service):
         if not access_jti:
             return
 
-        payload = verify_token(access_token, expected_type="access")
+        payload = await verify_token_with_blacklist(self.db, access_token, expected_type="access")
         expires_at = self._get_token_expires_at(payload, timedelta(minutes=15))
         await blacklist_token(self.db, access_jti, "access", expires_at)
 

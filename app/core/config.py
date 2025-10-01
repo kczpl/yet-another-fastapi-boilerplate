@@ -1,109 +1,111 @@
-import os
-import json
-import boto3
-from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic import ConfigDict, model_validator
+from typing_extensions import Self
 
 
-class Settings(BaseSettings):
-    VERSION: str = "0.0.1"
-    ENVIRONMENT: str = "development"
-    TIMEZONE: str = "UTC"
-    LOG_LEVEL: str = "INFO"
+################################################################################
+# Domain-Specific Configs
+################################################################################
 
-    # URL #
-    API_DOMAIN: str = "api.example.com"
-    FRONTEND_DOMAIN: str = "frontend.example.com"
-    # DB #
-    DATABASE_URL: str
-    # AWS #
-    SES_DOMAIN: str | None = None  # non-secret
-    S3_BUCKET_NAME: str | None = None  # non-secret
-    S3_PUBLIC_BUCKET_NAME: str | None = None  # non-secret
-    # for local development #
-    AWS_ACCESS_KEY: str | None = None
-    AWS_SECRET_KEY: str | None = None
-    # JWT #
+
+class AuthConfig(BaseSettings):
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     MAGIC_LINK_EXPIRE_MINUTES: int = 15
 
-    model_config = ConfigDict(env_file="../.env", env_file_encoding="utf-8")
+    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
-def load_config() -> Settings:
-    # environment and secret name are passed as environment variables in task definition
-    environment = os.getenv("ENVIRONMENT", "development").lower()
-    secret_name = os.getenv("AWS_SECRET_NAME")
-    region = os.getenv("AWS_REGION", "eu-central-1")
+class DatabaseConfig(BaseSettings):
+    DATABASE_URL: str
 
-    if environment in ["production", "staging"]:
-        config = _load_from_secrets_manager(secret_name, region, environment)
-    else:
-        config = _load_from_dotenv(environment)
-
-    config = _add_non_secret_variables(config)
-    return config
+    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
-################################################################################
-# Loading environment variables #
-################################################################################
+class AWSConfig(BaseSettings):
+    AWS_REGION: str = "eu-central-1"
+    AWS_ACCESS_KEY: str | None = None
+    AWS_SECRET_KEY: str | None = None
+    SES_DOMAIN: str | None = None
+    S3_BUCKET_NAME: str | None = None
+    S3_PUBLIC_BUCKET_NAME: str | None = None
+
+    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
-def _load_from_secrets_manager(secret_name: str, region: str, environment: str) -> Settings:
-    if not secret_name:
-        raise ValueError("secret_name is required for production/staging environment")
+class IntegrationsConfig(BaseSettings):
+    # OpenAI
+    OPENAI_API_KEY: str | None = None
 
-    try:
-        client = boto3.client("secretsmanager", region_name=region)
-        response = client.get_secret_value(SecretId=secret_name)
-        secret_data = json.loads(response["SecretString"])
-        secret_data["ENVIRONMENT"] = environment
-
-        config = Settings(**secret_data)
-
-        return config
-
-    except Exception as e:
-        raise Exception(f"Failed to load from AWS Secrets Manager: {e}")
-
-
-def _load_from_dotenv(environment: str) -> Settings:
-    load_dotenv()
-    config = Settings()
-    config.ENVIRONMENT = environment
-    return config
+    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 ################################################################################
-# Load non-secret variables #
+# Main Application Config
 ################################################################################
 
 
-def _add_non_secret_variables(config: Settings) -> Settings:
-    env_configs = {
-        "production": {
-            "API_DOMAIN": "api.example.com",
-        },
-        "staging": {
-            "API_DOMAIN": "api-staging.example.com",
-        },
-        "development": {
-            "API_DOMAIN": "api-staging.example.com",
-            "SES_DOMAIN": "mail.staging.myapp.com",
-        },
-    }
+class Settings(BaseSettings):
+    """Main application settings."""
 
-    values = env_configs.get(config.ENVIRONMENT)
-    for key, value in values.items():
-        setattr(config, key, value)
+    # App Info
+    VERSION: str = "0.0.1"
+    ENVIRONMENT: str = "development"
+    TIMEZONE: str = "UTC"
+    LOG_LEVEL: str = "INFO"
 
-    return config
+    # Domains (can be overridden via ENV vars)
+    API_DOMAIN: str = "localhost:8000"
+    FRONTEND_DOMAIN: str = "localhost:3000"
+
+    # Sentry
+    SENTRY_DSN: str | None = None
+
+    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def set_environment_defaults(self) -> Self:
+        """Set environment-specific defaults if not overridden by ENV vars."""
+        env_defaults = {
+            "production": {
+                "API_DOMAIN": "api.example.com",
+                "FRONTEND_DOMAIN": "frontend.example.com",
+            },
+            "staging": {
+                "API_DOMAIN": "api-staging.example.com",
+                "FRONTEND_DOMAIN": "frontend-staging.example.com",
+            },
+        }
+
+        # Only apply defaults if using default values
+        defaults = env_defaults.get(self.ENVIRONMENT.lower(), {})
+        for key, value in defaults.items():
+            if getattr(self, key) == "localhost:8000" or getattr(self, key) == "localhost:3000":
+                setattr(self, key, value)
+
+        return self
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower() == "production"
+
+    @property
+    def is_staging(self) -> bool:
+        return self.ENVIRONMENT.lower() == "staging"
+
+    @property
+    def is_development(self) -> bool:
+        return self.ENVIRONMENT.lower() in ("development", "local")
 
 
-# global config instance
-config = load_config()
+################################################################################
+# Global Config Instances
+################################################################################
+
+config = Settings()
+auth_config = AuthConfig()
+database_config = DatabaseConfig()
+aws_config = AWSConfig()
+integrations_config = IntegrationsConfig()

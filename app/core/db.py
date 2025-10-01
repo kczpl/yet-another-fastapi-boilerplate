@@ -1,11 +1,22 @@
 from sqlalchemy.orm import DeclarativeBase
-
+from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from typing import AsyncGenerator
-from app.core.config import config
+from app.core.config import database_config
+
+# PostgreSQL naming convention for indexes
+POSTGRES_INDEXES_NAMING_CONVENTION = {
+    "ix": "%(column_0_label)s_idx",
+    "uq": "%(table_name)s_%(column_0_name)s_key",
+    "ck": "%(table_name)s_%(constraint_name)s_check",
+    "fk": "%(table_name)s_%(column_0_name)s_fkey",
+    "pk": "%(table_name)s_pkey",
+}
+
+metadata = MetaData(naming_convention=POSTGRES_INDEXES_NAMING_CONVENTION)
 
 engine = create_async_engine(
-    config.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+    database_config.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
     # echo=True,
     echo=False,
     pool_pre_ping=True,  # test connections before use (handles dropped connections).
@@ -27,7 +38,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 # SQLAlchemy declarative base - all ORM models inherit from this #
 class Base(DeclarativeBase):
-    pass
+    metadata = metadata
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
