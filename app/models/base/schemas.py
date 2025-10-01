@@ -1,7 +1,7 @@
-from typing import Generic, TypeVar, List
+from typing import Generic, TypeVar, List, Any
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from fastapi.encoders import jsonable_encoder
 
 T = TypeVar("T")
@@ -18,10 +18,15 @@ class Base(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
-        json_encoders={
-            datetime: datetime_to_gmt_str,
-        },
     )
+
+    @field_serializer("*", mode="wrap", check_fields=False)
+    def serialize_datetime(self, value: Any, handler, info) -> Any:
+        """Serialize datetime fields to GMT string format."""
+        result = handler(value)
+        if isinstance(result, datetime):
+            return datetime_to_gmt_str(result)
+        return result
 
     def serializable_dict(self, **kwargs):
         """Return a dict which contains only serializable fields."""

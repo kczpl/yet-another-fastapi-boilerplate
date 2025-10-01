@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from typing import AsyncGenerator
 from app.core.config import database_config
 
-# PostgreSQL naming convention for indexes
+# PostgreSQL naming convention for indexes #
 POSTGRES_INDEXES_NAMING_CONVENTION = {
     "ix": "%(column_0_label)s_idx",
     "uq": "%(table_name)s_%(column_0_name)s_key",
@@ -17,7 +17,6 @@ metadata = MetaData(naming_convention=POSTGRES_INDEXES_NAMING_CONVENTION)
 
 engine = create_async_engine(
     database_config.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-    # echo=True,
     echo=False,
     pool_pre_ping=True,  # test connections before use (handles dropped connections).
     pool_size=15,  # maximum number of connections in the pool

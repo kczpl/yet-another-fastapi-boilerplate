@@ -1,15 +1,28 @@
 from typing import Any
+import uuid
 import structlog
 from structlog.types import EventDict
 from .config import config as settings
 
 
 def drop_color_message_key(_, __, event_dict: EventDict) -> EventDict:
-    """
-    Uvicorn logs the message a second time in the extra `color_message`, but we don't
-    need it. This processor drops the key from the event dict if it exists.
-    """
     event_dict.pop("color_message", None)
+    return event_dict
+
+
+def generate_request_id() -> str:
+    return uuid.uuid4().hex[:8]
+
+
+def add_request_id(_, __, event_dict: EventDict) -> EventDict:
+    try:
+        from asgi_correlation_id.context import correlation_id
+
+        request_id = correlation_id.get()
+        if request_id:
+            event_dict["request_id"] = request_id
+    except (ImportError, LookupError):
+        pass
     return event_dict
 
 
@@ -17,48 +30,31 @@ LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "default": {
+        "json": {
             "()": structlog.stdlib.ProcessorFormatter,
-            "foreign_pre_chain": [
-                structlog.contextvars.merge_contextvars,
-                structlog.stdlib.add_log_level,
-                structlog.stdlib.PositionalArgumentsFormatter(),
-                structlog.stdlib.ExtraAdder(),
-                drop_color_message_key,
-                structlog.processors.TimeStamper(fmt="iso"),
-                structlog.processors.StackInfoRenderer(),
-                structlog.processors.format_exc_info,
-            ],
             "processors": [
+                add_request_id,
                 structlog.stdlib.ProcessorFormatter.remove_processors_meta,
                 structlog.processors.JSONRenderer(),
             ],
         },
-        "access": {
-            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        },
     },
     "handlers": {
-        "default": {
-            "formatter": "default",
-            "class": "logging.StreamHandler",
-            "stream": "ext://sys.stderr",
-        },
-        "access": {
-            "formatter": "access",
+        "console": {
+            "formatter": "json",
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
         },
     },
     "loggers": {
-        "uvicorn.error": {"level": "INFO", "handlers": ["default"], "propagate": False},
-        "uvicorn.access": {"level": "INFO", "handlers": ["access"], "propagate": False},
-        "httpx": {"level": "WARNING", "handlers": ["default"], "propagate": False},
-        "boto3": {"level": "WARNING", "handlers": ["default"], "propagate": False},
-        "botocore": {"level": "WARNING", "handlers": ["default"], "propagate": False},
-        "twilio": {"level": "WARNING", "handlers": ["default"], "propagate": False},
+        "uvicorn.error": {"handlers": ["console"], "propagate": False},
+        "uvicorn.access": {"handlers": ["console"], "propagate": False},
+        "httpx": {"level": "WARNING"},
+        "boto3": {"level": "WARNING"},
+        "botocore": {"level": "WARNING"},
+        "twilio": {"level": "WARNING"},
     },
-    "root": {"level": "INFO", "handlers": ["default"], "propagate": False},
+    "root": {"level": "INFO", "handlers": ["console"]},
 }
 
 
@@ -73,10 +69,11 @@ def setup_logging(log_level: str = None):
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.stdlib.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            add_request_id,
             structlog.stdlib.PositionalArgumentsFormatter(),
             structlog.stdlib.ExtraAdder(),
             drop_color_message_key,
-            structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
@@ -89,7 +86,6 @@ def setup_logging(log_level: str = None):
     import logging.config
     import warnings
 
-    # suppress SWIG deprecation warnings from native dependencies
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="<frozen importlib._bootstrap>")
 
     logging_config = LOGGING_CONFIG.copy()
@@ -100,13 +96,10 @@ def setup_logging(log_level: str = None):
 
 
 class FastAPIStructLogger:
-    """simplified structlog wrapper with contextvars support"""
-
     def __init__(self):
         self.logger = structlog.stdlib.get_logger()
 
     def bind(self, **new_values: Any):
-        """bind values to contextvars for automatic inclusion in all log entries"""
         structlog.contextvars.bind_contextvars(**new_values)
 
     @staticmethod
@@ -133,12 +126,6 @@ class FastAPIStructLogger:
 
     def exception(self, event: str | None = None, *args: Any, **kw: Any):
         self.logger.exception(event, *args, **kw)
-
-
-# # convenience functions
-# def get_logger() -> FastAPIStructLogger:
-#     """get a FastAPIStructLogger instance with contextvars support"""
-#     return FastAPIStructLogger()
 
 
 def clear_context():
