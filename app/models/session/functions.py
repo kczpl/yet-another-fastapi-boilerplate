@@ -58,9 +58,7 @@ async def create_user_session(
 
 
 async def invalidate_user_magic_links(db: AsyncSession, user_id: uuid.UUID) -> None:
-    stmt = (
-        update(MagicLinkToken).where(MagicLinkToken.user_id == user_id, ~MagicLinkToken.used).values(used=True)
-    )
+    stmt = update(MagicLinkToken).where(MagicLinkToken.user_id == user_id, ~MagicLinkToken.used).values(used=True)
     await db.execute(stmt)
     await db.commit()
 

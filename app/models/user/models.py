@@ -28,5 +28,9 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
 
     # relationships
-    sessions: Mapped[List["UserSession"]] = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
-    magic_links: Mapped[List["MagicLinkToken"]] = relationship("MagicLinkToken", back_populates="user", cascade="all, delete-orphan")
+    sessions: Mapped[List["UserSession"]] = relationship(
+        "UserSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    magic_links: Mapped[List["MagicLinkToken"]] = relationship(
+        "MagicLinkToken", back_populates="user", cascade="all, delete-orphan"
+    )

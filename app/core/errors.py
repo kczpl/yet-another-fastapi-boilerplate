@@ -5,6 +5,7 @@ ERRORS = {
     "insufficient_permissions": "api.auth.insufficient_permissions",
     "email_not_verified": "api.auth.email_not_verified",
     "invalid_token": "api.auth.invalid_token",
+    "invalid_magic_link_token": "api.auth.invalid_magic_link_token",
     "too_many_login_attempts": "api.auth.too_many_login_attempts",
     "verification_code_invalid_or_expired": "api.auth.verification_code_invalid_or_expired",
     "magic_link_send_failed": "api.auth.magic_link_send_failed",

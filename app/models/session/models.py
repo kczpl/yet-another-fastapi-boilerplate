@@ -12,10 +12,7 @@ class UserSession(Base):
     __tablename__ = "user_sessions"
 
     id: Mapped[uuid.UUID] = mapped_column(PostgresUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PostgresUUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE")
-    )
+    user_id: Mapped[uuid.UUID] = mapped_column(PostgresUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     ip_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Track IP
     user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Track device
     jti: Mapped[str] = mapped_column(Text, unique=True)  # JWT ID for token tracking

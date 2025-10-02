@@ -117,7 +117,13 @@ async def is_token_blacklisted(db: AsyncSession, jti: str) -> bool:
 
 
 def create_magic_link_token(email: str) -> str:
-    data = {"email": email, "purpose": "magic_link"}
+    import uuid
+
+    data = {
+        "email": email,
+        "purpose": "magic_link",
+        "jti": str(uuid.uuid4()),  # Add unique identifier to prevent duplicates
+    }
     expire = datetime.now(timezone.utc) + timedelta(minutes=MAGIC_LINK_EXPIRE_MINUTES)
     data.update({"exp": expire})
     return jwt.encode(data, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)

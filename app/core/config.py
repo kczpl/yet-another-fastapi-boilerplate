@@ -4,7 +4,7 @@ from typing_extensions import Self
 
 
 ################################################################################
-# Domain-Specific Configs
+# domain-specific configs #
 ################################################################################
 
 
@@ -43,25 +43,25 @@ class IntegrationsConfig(BaseSettings):
 
 
 ################################################################################
-# Main Application Config
+# main application config #
 ################################################################################
 
 
 class Settings(BaseSettings):
-    """Main application settings."""
-
-    # App Info
+    # info #
     VERSION: str = "0.0.1"
     ENVIRONMENT: str = "development"
     TIMEZONE: str = "UTC"
     LOG_LEVEL: str = "INFO"
-
-    # Domains (can be overridden via ENV vars)
+    # domains #
     API_DOMAIN: str = "localhost:8000"
     FRONTEND_DOMAIN: str = "localhost:3000"
 
-    # Sentry
+    # sentry #
     SENTRY_DSN: str | None = None
+    # encryption #
+    ENCRYPTION_SECRET_KEY: str | None = None
+    ENCRYPTION_SALT: str | None = None
 
     model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -101,10 +101,29 @@ class Settings(BaseSettings):
 
 
 ################################################################################
-# Global Config Instances
+# helper functions #
 ################################################################################
 
+
+def get_app_config(config: Settings) -> dict:
+    SHOW_DOCS_ENVIRONMENT = ("development", "local")
+    app_configs = {
+        "title": "FastAPI Boilerplate",
+        "version": config.VERSION,
+    }
+    if config.ENVIRONMENT not in SHOW_DOCS_ENVIRONMENT:
+        app_configs["openapi_url"] = None  # hide docs
+
+    return app_configs
+
+
+################################################################################
+# global config instances #
+################################################################################
+
+
 config = Settings()
+app_config = get_app_config(config)
 auth_config = AuthConfig()
 database_config = DatabaseConfig()
 aws_config = AWSConfig()
