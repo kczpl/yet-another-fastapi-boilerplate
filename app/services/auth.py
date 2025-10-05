@@ -29,6 +29,7 @@ from app.models.session.functions import (
 )
 from app.core.responses import success_response, MESSAGES
 
+# TODO: clean up responses style #
 
 ################################################################################
 # POST /api/v1/auth/login #
