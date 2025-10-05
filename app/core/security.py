@@ -21,6 +21,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# TODO: use config per env for CORS #
 def setup_cors(app) -> None:
     app.add_middleware(
         CORSMiddleware,

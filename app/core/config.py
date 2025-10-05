@@ -28,7 +28,8 @@ class AWSConfig(BaseSettings):
     AWS_REGION: str = "eu-central-1"
     AWS_ACCESS_KEY: str | None = None
     AWS_SECRET_KEY: str | None = None
-    SES_DOMAIN: str | None = None
+
+    SES_DOMAIN: str | None = None # TODO: make this more agnostic to the specific provider
     S3_BUCKET_NAME: str | None = None
     S3_PUBLIC_BUCKET_NAME: str | None = None
 
@@ -38,7 +39,6 @@ class AWSConfig(BaseSettings):
 class IntegrationsConfig(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str | None = None
-
     model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
@@ -59,9 +59,7 @@ class Settings(BaseSettings):
 
     # sentry #
     SENTRY_DSN: str | None = None
-    # encryption #
-    ENCRYPTION_SECRET_KEY: str | None = None
-    ENCRYPTION_SALT: str | None = None
+
 
     model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

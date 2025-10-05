@@ -3,6 +3,7 @@ from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
 LOGIN_EMAIL_TEMPLATE = "login-email.html.jinja2"
 
+# TODO: clean up templates #
 
 def get_jinja_env() -> Environment:
     template_dir = os.path.join(os.path.dirname(__file__), "templates")

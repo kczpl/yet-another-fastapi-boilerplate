@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from app.services.base import Service
-from app.models.session.schemas import RefreshAccessTokenResponse
 from app.utils.jwt import (
     create_access_token,
     create_refresh_token,
@@ -97,7 +96,7 @@ class VerifyMagicLinkService(Service):
 
 
 class RefreshAccessTokenService(Service):
-    async def call(self, refresh_token: str) -> RefreshAccessTokenResponse:
+    async def call(self, refresh_token: str) -> dict:
         payload = await verify_token_with_blacklist(self.db, refresh_token, expected_type="refresh")
         user_id = payload.get("sub")
         jti = payload.get("jti")
@@ -124,9 +123,7 @@ class RefreshAccessTokenService(Service):
         }
 
         access_token = create_access_token(token_data)
-        log.info("access token refreshed", user_id=str(user.id))
-
-        return RefreshAccessTokenResponse(access_token=access_token)
+        return {"access_token": access_token}
 
 
 ################################################################################
@@ -135,7 +132,7 @@ class RefreshAccessTokenService(Service):
 
 
 class LogoutService(Service):
-    async def call(self, refresh_token: str, access_token: Optional[str] = None) -> bool:
+    async def call(self, refresh_token: str, access_token: Optional[str] = None) -> dict:
         refresh_jti = get_token_jti(refresh_token)
         if not refresh_jti:
             raise_bad_request(ERRORS["unauthorized"])
@@ -148,7 +145,7 @@ class LogoutService(Service):
             await self._blacklist_access_token(access_token)
 
         log.info("user logged out", refresh_jti=refresh_jti[:8], sessions_deleted=deleted_count)
-        return True
+        return success_response(MESSAGES["logged_out"])
 
     async def _blacklist_refresh_token(self, refresh_token: str, jti: str) -> None:
         payload = await verify_token_with_blacklist(self.db, refresh_token, expected_type="refresh")

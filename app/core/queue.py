@@ -5,12 +5,12 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 import asyncpg
 from pgqueuer.db import AsyncpgDriver
-from app.core.config import config
+from app.core.config import database_config
 
 
 @asynccontextmanager
 async def queue_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    conn = await asyncpg.connect(config.DATABASE_URL)
+    conn = await asyncpg.connect(database_config.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"))
     try:
         driver = AsyncpgDriver(conn)
         app.extra["pgq_queries"] = Queries(driver=driver)

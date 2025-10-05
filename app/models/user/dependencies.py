@@ -40,6 +40,7 @@ async def auth_user(
     scope = sentry_sdk.get_current_scope()
     scope.set_user({"id": str(user.id), "email": user.email})
 
+    # TODO: pydantic is not required here #
     return CurrentUser(
         id=str(user.id),
         email=user.email,
