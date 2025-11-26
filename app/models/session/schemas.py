@@ -11,6 +11,10 @@ class LoginRequest(Base):
     email: EmailStr = Field(max_length=254, description="Valid email address")
 
 
+class LoginResponse(Base):
+    message: str
+
+
 ################################################################################
 # POST /api/v1/auth/magic-link/verify #
 ################################################################################
@@ -39,6 +43,10 @@ class TokenResponse(Base):
 class LogoutRequest(Base):
     refresh_token: str = Field(min_length=1, max_length=1000, description="JWT refresh token")
     access_token: str | None = Field(None, max_length=1000, description="JWT access token")
+
+
+class LogoutResponse(Base):
+    message: str
 
 
 ################################################################################

@@ -29,7 +29,7 @@ class AWSConfig(BaseSettings):
     AWS_ACCESS_KEY: str | None = None
     AWS_SECRET_KEY: str | None = None
 
-    SES_DOMAIN: str | None = None # TODO: make this more agnostic to the specific provider
+    EMAIL_DOMAIN: str | None = None
     S3_BUCKET_NAME: str | None = None
     S3_PUBLIC_BUCKET_NAME: str | None = None
 
@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     # sentry #
     SENTRY_DSN: str | None = None
 
+    # cors #
+    CORS_ORIGINS: list[str] = []
 
     model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -70,17 +72,28 @@ class Settings(BaseSettings):
             "production": {
                 "API_DOMAIN": "api.example.com",
                 "FRONTEND_DOMAIN": "frontend.example.com",
+                "CORS_ORIGINS": ["https://frontend.example.com", "https://app.example.com"],
             },
             "staging": {
                 "API_DOMAIN": "api-staging.example.com",
                 "FRONTEND_DOMAIN": "frontend-staging.example.com",
+                "CORS_ORIGINS": ["https://frontend-staging.example.com"],
+            },
+            "development": {
+                "CORS_ORIGINS": ["http://localhost:3000", "http://localhost:3001"],
             },
         }
 
         # Only apply defaults if using default values
         defaults = env_defaults.get(self.ENVIRONMENT.lower(), {})
         for key, value in defaults.items():
-            if getattr(self, key) == "localhost:8000" or getattr(self, key) == "localhost:3000":
+            current_value = getattr(self, key)
+            # Apply defaults for domains if using default values
+            if key in ("API_DOMAIN", "FRONTEND_DOMAIN"):
+                if current_value in ("localhost:8000", "localhost:3000"):
+                    setattr(self, key, value)
+            # Apply CORS origins if empty
+            elif key == "CORS_ORIGINS" and not current_value:
                 setattr(self, key, value)
 
         return self

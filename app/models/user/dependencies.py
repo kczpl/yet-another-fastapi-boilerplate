@@ -7,7 +7,7 @@ from app.core.exceptions import raise_unauthorized
 from app.core.errors import ERRORS
 from app.core.logger import log
 from app.models.user.functions import find_active_user_by_id
-from app.models.user.schemas import CurrentUser
+from app.models.user.models import User
 import sentry_sdk
 import uuid
 
@@ -15,7 +15,7 @@ import uuid
 async def auth_user(
     db: AsyncSession = Depends(get_db),
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
-) -> CurrentUser:
+) -> User:
     if not credentials or not credentials.credentials:
         raise_unauthorized(ERRORS["unauthorized"])
 
@@ -40,11 +40,4 @@ async def auth_user(
     scope = sentry_sdk.get_current_scope()
     scope.set_user({"id": str(user.id), "email": user.email})
 
-    # TODO: pydantic is not required here #
-    return CurrentUser(
-        id=str(user.id),
-        email=user.email,
-        role=user.role,
-        is_active=user.is_active,
-        created_at=user.created_at,
-    )
+    return user

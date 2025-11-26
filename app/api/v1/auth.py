@@ -1,12 +1,13 @@
 from fastapi import APIRouter, status, Depends
-from fastapi.responses import JSONResponse
 from app.models.session.schemas import (
     LoginRequest,
+    LoginResponse,
     MagicLinkVerifyRequest,
     TokenResponse,
     RefreshRequest,
     RefreshAccessTokenResponse,
     LogoutRequest,
+    LogoutResponse,
 )
 from app.api.deps import get_client_info
 from app.services.auth import SendMagicLinkService, VerifyMagicLinkService, RefreshAccessTokenService, LogoutService
@@ -15,7 +16,7 @@ from app.services.auth import SendMagicLinkService, VerifyMagicLinkService, Refr
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login", status_code=status.HTTP_200_OK)
+@router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
 async def login(req: LoginRequest, service: SendMagicLinkService = Depends()):
     return await service.call(req.email)
 
@@ -37,7 +38,7 @@ async def refresh_access_token(
     return await auth.call(request.refresh_token)
 
 
-@router.post("/logout", response_model=JSONResponse, status_code=status.HTTP_200_OK)
+@router.post("/logout", response_model=LogoutResponse, status_code=status.HTTP_200_OK)
 async def logout(
     request: LogoutRequest,
     auth: LogoutService = Depends(),

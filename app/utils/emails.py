@@ -1,4 +1,4 @@
-from app.core.config import config
+from app.core.config import aws_config
 from app.core.logger import log
 from app.utils.aws import get_ses_client
 from app.utils.templates import render_login_email_template
@@ -9,7 +9,7 @@ def _send_ses_email(recipient_address: str, html_content: str, email_subject: st
         log.warning("missing email data", recipient=recipient_address)
         return None
 
-    from_address = f"noreply@{config.SES_DOMAIN}"
+    from_address = f"noreply@{aws_config.EMAIL_DOMAIN}"
     ses_client = get_ses_client()
 
     try:

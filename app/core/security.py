@@ -2,6 +2,7 @@ from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Callable
+from app.core.config import config
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -21,16 +22,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# TODO: use config per env for CORS #
 def setup_cors(app) -> None:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "https://frontend.example.com",
-            "https://app.example.com",
-        ],
+        allow_origins=config.CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=[

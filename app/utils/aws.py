@@ -1,29 +1,32 @@
 import boto3
-from app.core.config import config
+from app.core.config import config, aws_config
 from fastapi import UploadFile
 from io import BytesIO
+from functools import lru_cache
 
 
+@lru_cache(maxsize=1)
 def get_s3_client() -> boto3.client:
     if config.ENVIRONMENT == "development":
         session = boto3.Session(
-            aws_access_key_id=config.AWS_ACCESS_KEY,
-            aws_secret_access_key=config.AWS_SECRET_KEY,
+            aws_access_key_id=aws_config.AWS_ACCESS_KEY,
+            aws_secret_access_key=aws_config.AWS_SECRET_KEY,
         )
-        return session.client("s3", region_name="eu-central-1")
+        return session.client("s3", region_name=aws_config.AWS_REGION)
     else:
-        return boto3.client("s3", region_name="eu-central-1")
+        return boto3.client("s3", region_name=aws_config.AWS_REGION)
 
 
+@lru_cache(maxsize=1)
 def get_ses_client() -> boto3.client:
     if config.ENVIRONMENT == "development":
         session = boto3.Session(
-            aws_access_key_id=config.AWS_ACCESS_KEY,
-            aws_secret_access_key=config.AWS_SECRET_KEY,
+            aws_access_key_id=aws_config.AWS_ACCESS_KEY,
+            aws_secret_access_key=aws_config.AWS_SECRET_KEY,
         )
-        return session.client("ses", region_name="eu-central-1")
+        return session.client("ses", region_name=aws_config.AWS_REGION)
     else:
-        return boto3.client("ses", region_name="eu-central-1")
+        return boto3.client("ses", region_name=aws_config.AWS_REGION)
 
 
 def upload_file_to_s3(upload_file: UploadFile, s3_bucket: str, s3_key: str) -> tuple[str, str]:

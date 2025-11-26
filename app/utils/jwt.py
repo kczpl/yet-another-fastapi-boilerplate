@@ -7,8 +7,6 @@ from app.core.exceptions import raise_unauthorized, raise_bad_request
 from app.core.errors import ERRORS
 from jose import JWTError, jwt
 from app.core.logger import log
-from app.models.session.models import TokenBlacklist
-from sqlalchemy.ext.asyncio import AsyncSession
 
 ACCESS_TOKEN_EXPIRE_MINUTES = auth_config.ACCESS_TOKEN_EXPIRE_MINUTES
 REFRESH_TOKEN_EXPIRE_DAYS = auth_config.REFRESH_TOKEN_EXPIRE_DAYS
@@ -71,6 +69,8 @@ def verify_token(token: str, expected_type: str = "access") -> dict[str, Any]:
 
 
 async def verify_token_with_blacklist(db, token: str, expected_type: str = "access") -> dict[str, Any]:
+    from app.models.session.functions import is_token_blacklisted
+
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         token_type = payload.get("type")
@@ -101,14 +101,6 @@ def get_token_jti(token: str) -> str | None:
         return None
 
 
-async def is_token_blacklisted(db: AsyncSession, jti: str) -> bool:
-    from sqlalchemy import select
-
-    query = select(TokenBlacklist).where(
-        TokenBlacklist.jti == jti, TokenBlacklist.expires_at > datetime.now(timezone.utc)
-    )
-    result = await db.execute(query)
-    return result.scalar_one_or_none() is not None
 
 
 ################################################################################
@@ -148,32 +140,3 @@ def verify_magic_link_token(token: str) -> str:
         raise_bad_request(ERRORS["invalid_magic_link_token"])
 
 
-################################################################################
-# One-time tokens #
-################################################################################
-
-
-def create_onetime_token(email: str) -> str:
-    data = {"email": email, "purpose": "onetime_form"}
-    expire = datetime.now(timezone.utc) + timedelta(hours=1)
-    data.update({"exp": expire})
-
-    return jwt.encode(data, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-
-
-def verify_onetime_token(token: str) -> str:
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-
-        purpose = payload.get("purpose")
-        if purpose != "onetime_form":
-            raise_bad_request(ERRORS["invalid_one_time_token"])
-
-        email = payload.get("email")
-        if not email:
-            raise_bad_request(ERRORS["invalid_one_time_token"])
-
-        return email
-
-    except JWTError:
-        raise_bad_request(ERRORS["invalid_one_time_token"])

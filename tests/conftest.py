@@ -55,15 +55,12 @@ app.router.lifespan_context = mock_lifespan
 
 from app.core.db import get_db, Base  # noqa: E402
 from app.models.user.dependencies import auth_user  # noqa: E402
-from app.models.user.schemas import CurrentUser  # noqa: E402
 from app.models.user.models import User  # noqa: E402
 
 TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/postgres"
 TEST_JWT_SECRET_KEY = "test-jwt-secret-key"
 TEST_JWT_ALGORITHM = "HS256"
 MOCK_USER_ID = "4ef80032-9b19-4948-8f1f-69758f35a70a"
-TEST_ENCRYPTION_SECRET_KEY = "test-encryption-secret-key"
-TEST_ENCRYPTION_SALT = "test-encryption-salt"
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -109,13 +106,7 @@ async def client(test_session) -> AsyncGenerator[AsyncClient, None]:
         result = await test_session.execute(select(User).where(User.id == MOCK_USER_ID))
         user = result.scalar_one_or_none()
         if user:
-            return CurrentUser(
-                id=str(user.id),
-                email=user.email,
-                role=user.role,
-                is_active=user.is_active,
-                created_at=user.created_at,
-            )
+            return user  # Return ORM User model directly
         else:
             raise HTTPException(status_code=401, detail="User not found")
 
@@ -167,10 +158,3 @@ def mock_jwt_settings(mocker: MockerFixture):
     """mock JWT settings globally for all tests"""
     mocker.patch("app.utils.jwt.JWT_SECRET_KEY", TEST_JWT_SECRET_KEY)
     mocker.patch("app.utils.jwt.JWT_ALGORITHM", TEST_JWT_ALGORITHM)
-
-
-@pytest.fixture(scope="function", autouse=True)
-def mock_encryption_secret_key(mocker: MockerFixture):
-    """mock encryption secret key and salt globally for all tests"""
-    mocker.patch("app.core.config.config.ENCRYPTION_SECRET_KEY", TEST_ENCRYPTION_SECRET_KEY)
-    mocker.patch("app.core.config.config.ENCRYPTION_SALT", TEST_ENCRYPTION_SALT)

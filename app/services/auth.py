@@ -27,9 +27,6 @@ from app.models.session.functions import (
     delete_user_session,
     blacklist_token,
 )
-from app.core.responses import success_response, MESSAGES
-
-# TODO: clean up responses style #
 
 ################################################################################
 # POST /api/v1/auth/login #
@@ -42,7 +39,7 @@ from app.core.responses import success_response, MESSAGES
 
 
 class SendMagicLinkService(Service):
-    async def call(self, email: str) -> bool:
+    async def call(self, email: str) -> dict:
         user = await find_active_user_by_email(self.db, email)
 
         await invalidate_user_magic_links(self.db, user.id)
@@ -56,7 +53,7 @@ class SendMagicLinkService(Service):
             raise_server_error(ERRORS["magic_link_send_failed"])
 
         log.info("magic link sent", user_id=str(user.id), email=email)
-        return success_response(MESSAGES["magic_link_sent"])
+        return {"message": "api.auth.magic_link_sent"}
 
 
 ################################################################################
@@ -146,7 +143,7 @@ class LogoutService(Service):
             await self._blacklist_access_token(access_token)
 
         log.info("user logged out", refresh_jti=refresh_jti[:8], sessions_deleted=deleted_count)
-        return success_response(MESSAGES["logged_out"])
+        return {"message": "api.auth.logged_out_successfully"}
 
     async def _blacklist_refresh_token(self, refresh_token: str, jti: str) -> None:
         payload = await verify_token_with_blacklist(self.db, refresh_token, expected_type="refresh")
