@@ -1,27 +1,16 @@
-from pydantic_settings import BaseSettings
-from pydantic import ConfigDict, model_validator
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing_extensions import Self
-
 
 ################################################################################
 # domain-specific configs #
 ################################################################################
 
 
-class AuthConfig(BaseSettings):
-    JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    MAGIC_LINK_EXPIRE_MINUTES: int = 15
-
-    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
-
-
 class DatabaseConfig(BaseSettings):
-    DATABASE_URL: str
+    DATABASE_URL: str = Field(...)
 
-    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 class AWSConfig(BaseSettings):
@@ -33,13 +22,13 @@ class AWSConfig(BaseSettings):
     S3_BUCKET_NAME: str | None = None
     S3_PUBLIC_BUCKET_NAME: str | None = None
 
-    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 class IntegrationsConfig(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str | None = None
-    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 ################################################################################
@@ -47,54 +36,34 @@ class IntegrationsConfig(BaseSettings):
 ################################################################################
 
 
-class Settings(BaseSettings):
-    # info #
+class Config(BaseSettings):
     VERSION: str = "0.0.1"
     ENVIRONMENT: str = "development"
     TIMEZONE: str = "UTC"
     LOG_LEVEL: str = "INFO"
-    # domains #
+    SHOW_DOCS: bool = True
+
     API_DOMAIN: str = "localhost:8000"
     FRONTEND_DOMAIN: str = "localhost:3000"
 
-    # sentry #
     SENTRY_DSN: str | None = None
 
-    # cors #
     CORS_ORIGINS: list[str] = []
 
-    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")
     def set_environment_defaults(self) -> Self:
-        """Set environment-specific defaults if not overridden by ENV vars."""
-        env_defaults = {
-            "production": {
-                "API_DOMAIN": "api.example.com",
-                "FRONTEND_DOMAIN": "frontend.example.com",
-                "CORS_ORIGINS": ["https://frontend.example.com", "https://app.example.com"],
-            },
-            "staging": {
-                "API_DOMAIN": "api-staging.example.com",
-                "FRONTEND_DOMAIN": "frontend-staging.example.com",
-                "CORS_ORIGINS": ["https://frontend-staging.example.com"],
-            },
-            "development": {
-                "CORS_ORIGINS": ["http://localhost:3000", "http://localhost:3001"],
-            },
-        }
+        if self.is_production:
+            self.SHOW_DOCS = False
 
-        # Only apply defaults if using default values
-        defaults = env_defaults.get(self.ENVIRONMENT.lower(), {})
-        for key, value in defaults.items():
-            current_value = getattr(self, key)
-            # Apply defaults for domains if using default values
-            if key in ("API_DOMAIN", "FRONTEND_DOMAIN"):
-                if current_value in ("localhost:8000", "localhost:3000"):
-                    setattr(self, key, value)
-            # Apply CORS origins if empty
-            elif key == "CORS_ORIGINS" and not current_value:
-                setattr(self, key, value)
+        if not self.CORS_ORIGINS:
+            if self.is_production:
+                self.CORS_ORIGINS = ["https://frontend.example.com", "https://app.example.com"]
+            elif self.is_staging:
+                self.CORS_ORIGINS = ["https://frontend-staging.example.com"]
+            else:
+                self.CORS_ORIGINS = ["http://localhost:3000", "http://localhost:3001"]
 
         return self
 
@@ -112,30 +81,11 @@ class Settings(BaseSettings):
 
 
 ################################################################################
-# helper functions #
-################################################################################
-
-
-def get_app_config(config: Settings) -> dict:
-    SHOW_DOCS_ENVIRONMENT = ("development", "local")
-    app_configs = {
-        "title": "FastAPI Boilerplate",
-        "version": config.VERSION,
-    }
-    if config.ENVIRONMENT not in SHOW_DOCS_ENVIRONMENT:
-        app_configs["openapi_url"] = None  # hide docs
-
-    return app_configs
-
-
-################################################################################
 # global config instances #
 ################################################################################
 
 
-config = Settings()
-app_config = get_app_config(config)
-auth_config = AuthConfig()
+config = Config()
 database_config = DatabaseConfig()
 aws_config = AWSConfig()
 integrations_config = IntegrationsConfig()

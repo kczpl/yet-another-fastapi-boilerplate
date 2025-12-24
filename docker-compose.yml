@@ -1,16 +1,4 @@
 services:
-
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    container_name: app-worker
-    env_file:
-      - .env
-    volumes:
-      - ./app:/app/app
-      - ./alembic:/app/alembic
-
   api:
     build:
       context: .
@@ -33,16 +21,6 @@ services:
       - "127.0.0.1:5433:5432"
     volumes:
       - postgres_test_data:/var/lib/postgresql/data/
-
-  postgres:
-    image: postgres:17
-    container_name: app-postgres
-    environment:
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "127.0.0.1:5434:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
 
 volumes:
   postgres_test_data:

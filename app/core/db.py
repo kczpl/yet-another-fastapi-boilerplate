@@ -1,7 +1,9 @@
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import MetaData
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from typing import AsyncGenerator
+
+from sqlalchemy import MetaData
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
+
 from app.core.config import database_config
 
 # PostgreSQL naming convention for indexes #
@@ -26,8 +28,7 @@ engine = create_async_engine(
 )
 
 
-# SessionLocal is a factory for creating database sessions #
-AsyncSessionLocal = async_sessionmaker(
+AsyncSessionLocal = async_sessionmaker[AsyncSession](
     autoflush=False,
     expire_on_commit=False,
     bind=engine,
