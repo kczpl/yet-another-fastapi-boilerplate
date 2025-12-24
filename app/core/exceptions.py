@@ -1,8 +1,8 @@
-from fastapi import HTTPException, FastAPI
-from fastapi import Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
+
 from app.core.errors import ERRORS
 from app.core.logger import log
 
@@ -48,18 +48,28 @@ def raise_server_error(error_key: str = "general.internal_error", **kwargs) -> A
     raise APIException(error_key, 500, **kwargs)
 
 
-async def handle_api_exception(request: Request, exc: APIException) -> JSONResponse:
-    log.error(f"api error: {exc.error_key}", path=request.url.path, status=exc.status_code, exc_info=str(exc))
+async def handle_api_exception(request: Request, exc: Exception) -> JSONResponse:
+    api_exc = exc if isinstance(exc, APIException) else None
+    if api_exc is None:
+        raise exc
+
+    log.error(
+        f"api error: {api_exc.error_key}", path=request.url.path, status=api_exc.status_code, exc_info=str(api_exc)
+    )
     return JSONResponse(
-        status_code=exc.status_code,
-        content={"error": exc.error_key, "data": exc.kwargs},
+        status_code=api_exc.status_code,
+        content={"error": api_exc.error_key, "data": api_exc.kwargs},
     )
 
 
-async def handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
+    validation_exc = exc if isinstance(exc, (RequestValidationError, ValidationError)) else None
+    if validation_exc is None:
+        raise exc
+
     details = []
 
-    for error in exc.errors():
+    for error in validation_exc.errors():
         field = ".".join(str(x) for x in error.get("loc", ()))
         error_type = error.get("type", "")
 
@@ -72,7 +82,7 @@ async def handle_validation_error(request: Request, exc: RequestValidationError)
 
         details.append({"field": field, "message": message, "type": error_type})
 
-    log.error(f"validation error: {details}", exc_info=str(exc))
+    log.error(f"validation error: {details}", exc_info=str(validation_exc))
     return JSONResponse(
         status_code=422,
         content={
@@ -84,7 +94,10 @@ async def handle_validation_error(request: Request, exc: RequestValidationError)
 
 async def handle_generic_exception(request: Request, exc: Exception) -> JSONResponse:
     log.error(f"generic exception: {exc}", exc_info=str(exc), path=request.url.path)
-    raise_server_error(ERRORS["server_error"])
+    return JSONResponse(
+        status_code=500,
+        content={"error": ERRORS["server_error"], "data": {}},
+    )
 
 
 def setup_exception_handlers(app: FastAPI):
