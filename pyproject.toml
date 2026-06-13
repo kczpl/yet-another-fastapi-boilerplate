@@ -1,45 +1,69 @@
 [project]
-name = "backend-app"
+name = "app"
 version = "0.0.1"
-description = "Backend app"
+description = "Minimal FastAPI + Celery boilerplate"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "alembic>=1.17.2",
-    "asyncpg>=0.31.0",
-    "celery[redis]>=5.6.0",
-    "factory-boy>=3.3.3",
+    # core
     "fastapi>=0.125.0",
     "fastapi-guard>=4.2.2",
-    "greenlet>=3.3.0",
-    "httpx>=0.28.1",
-    "psycopg[binary]>=3.3.2",
-    "pydantic-ai-slim[anthropic,bedrock]>=1.35.0",
-    "pydantic-settings>=2.12.0",
-    "rich>=14.2.0",
-    "sentry-sdk[fastapi,sqlalchemy]>=2.48.0",
-    "sqlalchemy>=2.0.45",
-    "structlog>=25.5.0",
     "uvicorn[standard]>=0.38.0",
+    "pydantic-settings>=2.12.0",
+    "httpx>=0.28.1",
+    # db
+    "sqlalchemy>=2.0.45",
+    "psycopg[binary,pool]>=3.3.2",
+    "alembic>=1.17.2",
+    "greenlet>=3.3.0",
+    "uuid-utils>=0.10",
+    # worker
+    "celery[redis]>=5.6.0",
+    "redis>=5.2.0",
+    # ai (pydantic-ai + AWS Bedrock)
+    "pydantic-ai-slim[anthropic,bedrock]>=1.35.0",
+    "boto3>=1.35.0",
+    "genai-prices>=0.0.66",
+    # observability
+    "sentry-sdk[celery,fastapi,sqlalchemy]>=2.48.0",
+    "structlog>=25.5.0",
 ]
 
 [dependency-groups]
 dev = [
     "factory-boy>=3.3.3",
-    "faker>=37.4.0",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.1.0",
-    "pytest-mock>=3.14.1",
+    "ruff>=0.9.2",
+    "watchfiles>=1.1.1",
 ]
 
 [tool.ruff]
 line-length = 120
 
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
+ignore = [
+    "B008",  # FastAPI Depends() in default arguments — intentional pattern
+    "E501",  # line-too-long — formatting handled by ruff format
+    "UP046", # keep Generic[T] base (Pydantic generic models); don't force PEP 695
+    "UP047", # keep classic generic function syntax
+]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", "alembic/versions"]
+
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 filterwarnings = [
     "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
-    "ignore:datetime.datetime.utcnow\\(\\) is deprecated:DeprecationWarning:botocore",
-    "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
-    "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
-    "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
 ]

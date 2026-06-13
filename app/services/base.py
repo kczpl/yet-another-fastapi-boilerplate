@@ -1,11 +1,6 @@
-from typing import Annotated
-
-from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.db import get_db
+from app.core.db import AsyncDb
 
 
 class Service:
-    def __init__(self, db: Annotated[AsyncSession, Depends(get_db, use_cache=True)]):
+    def __init__(self, db: AsyncDb):
         self.db = db

@@ -1,26 +1,95 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: /app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+
+  workers:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: []
+    command: /app/.venv/bin/watchfiles --filter python "/app/.venv/bin/celery -A app.workers.celery:celery worker --loglevel=info -Q default,heavy" ./app
+    volumes:
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+
+  cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: []
+    command: /app/.venv/bin/celery -A app.workers.celery:celery beat --loglevel=info
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+
   postgres:
     image: postgres:18
     environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
     ports:
-      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/18/data
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
 
-  test-postgres:
+  postgres-test:
     image: postgres:18
     environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: app_test
+      POSTGRES_PASSWORD: app_test
+      POSTGRES_DB: app_test
     ports:
-      - "127.0.0.1:5435:5432"
+      - "127.0.0.1:${POSTGRES_TEST_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_test -d app_test"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
-      - postgres_data:/var/lib/postgresql/18/data
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  postgres_test_data:
   postgres_data:
+  redis_data:
