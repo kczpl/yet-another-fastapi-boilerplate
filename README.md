@@ -1,5 +1,19 @@
 # Yet another FastAPI boilerplate
 
+<p align="center">
+  <em>Minimal, production-ready FastAPI + Celery template — feature-based architecture, async all the way down.</em>
+</p>
+
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.13+-3776AB?logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white">
+  <img alt="SQLAlchemy" src="https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?logo=sqlalchemy&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white">
+  <img alt="Celery" src="https://img.shields.io/badge/Celery-5.6-37814A?logo=celery&logoColor=white">
+  <img alt="pydantic-ai" src="https://img.shields.io/badge/pydantic--ai-Bedrock-E92063?logo=amazonaws&logoColor=white">
+  <img alt="uv" src="https://img.shields.io/badge/uv-managed-DE5FE9?logo=uv&logoColor=white">
+</p>
+
 A minimal, lightweight FastAPI + Celery template following a feature-based architecture.
 
 ## Stack
