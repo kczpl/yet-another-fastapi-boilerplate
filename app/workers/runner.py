@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 from collections.abc import Coroutine
 from typing import Any, TypeVar
 
@@ -12,7 +13,10 @@ _runner: asyncio.Runner | None = None
 def run_async(coro: Coroutine[Any, Any, T]) -> T:
     if _runner is None:
         raise RuntimeError("async runner not initialized — is this running inside a Celery worker?")
-    return _runner.run(coro)
+    # Runner snapshots contextvars at its first run() (worker init, before any task) —
+    # copy the current context per call so structlog bindings made in the task body
+    # (task_id, item_id, ...) are visible to logs emitted inside the coroutine.
+    return _runner.run(coro, context=contextvars.copy_context())
 
 
 def run_service(service_cls: type, *args, **kwargs):

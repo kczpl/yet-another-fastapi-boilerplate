@@ -47,7 +47,7 @@ async def summarize_text(text: str) -> TextSummary:
     result = await summarizer_agent.run(text, usage_limits=get_usage_limits())
     log_agent_cost(
         "text_summarization_completed",
-        result.usage,
+        result.usage(),
         result.response.model_name or MODEL,
         keywords=len(result.output.keywords),
     )

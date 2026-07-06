@@ -45,7 +45,7 @@ Worker crash mid-task → re-delivery. The first execution might have partially 
 Patterns:
 - **Cron jobs**: write a `processed_at` marker; the next run skips marked rows
 - **Per-entity tasks**: check entity state at the top of the service, return early if already done (see `SummarizeItemService` — skips when `summary is not None`)
-- **External side effects (email/webhooks)**: a per-enqueue `dedup_key` (`new_dedup_key()` from `app/workers/idempotency.py`) + a Redis delivery marker set only **after** the side effect succeeds, so broker re-delivery is a no-op while `autoretry_for` retries still fire
+- **External side effects (email/webhooks)**: generate a per-enqueue `dedup_key` (`str(uuid.uuid4())`) at enqueue time and pass it as a task argument; in the task, skip when a Redis marker (`task_delivered:<kind>:<dedup_key>`, TTL ~24h) exists and set it only **after** the side effect succeeds — broker re-delivery is a no-op while `autoretry_for` retries still fire. Implement the marker helpers next to the first task that needs them.
 - **External APIs**: pass idempotency keys when supported
 
 Don't dedup on the Celery `task_id` — retries reuse the same id.

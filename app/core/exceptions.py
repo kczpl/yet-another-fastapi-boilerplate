@@ -12,6 +12,8 @@ from app.core.logger import log
 
 class APIException(HTTPException):
     def __init__(self, error_key: str, status_code: int = 500, **kwargs):
+        if error_key not in ERRORS:
+            raise ValueError(f"unregistered error key {error_key!r} — add it to ERRORS in app/core/errors.py")
         self.error_key = error_key
         self.status_code = status_code
         self.kwargs = kwargs
@@ -56,9 +58,11 @@ async def handle_api_exception(request: Request, exc: Exception) -> JSONResponse
     else:
         log.warning("api_error", error_key=api_exc.error_key, path=request.url.path, status=api_exc.status_code)
 
+    # Wire format carries the i18n key (like MESSAGES / the validation handler);
+    # the short key stays in logs. Lookup is safe — __init__ validated the key.
     return JSONResponse(
         status_code=api_exc.status_code,
-        content={"error": api_exc.error_key, "data": api_exc.kwargs},
+        content={"error": ERRORS[api_exc.error_key], "data": api_exc.kwargs},
     )
 
 

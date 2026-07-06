@@ -59,7 +59,7 @@ async def async_db_session() -> AsyncGenerator[AsyncSession]:
 
 
 ################################################################################
-# Redis (Celery broker + idempotency markers) #
+# Redis (Celery broker) #
 ################################################################################
 
 async_redis = AsyncRedisClient.from_url(
