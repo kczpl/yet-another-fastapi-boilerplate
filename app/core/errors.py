@@ -2,7 +2,8 @@
 #
 # Every key passed to raise_not_found / raise_bad_request / etc. must be a short
 # literal registered here (never an f-string). Add a "### Feature ###" section per
-# domain. tests/core/test_error_registry.py keeps raised keys and this dict in sync.
+# domain. Enforced twice: APIException rejects unregistered keys at raise time, and
+# tests/core/test_error_registry.py scans app/ for raise_* calls to catch typos in CI.
 ERRORS = {
     ### General ###
     "server_error": "api.general.internal_server_error",

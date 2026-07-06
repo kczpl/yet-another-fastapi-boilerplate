@@ -54,7 +54,7 @@ celery.conf.update(
     task_acks_late=True,
     # A pool child killed mid-task (OOM/SIGKILL) would otherwise ACK and silently
     # lose the task despite acks_late. Reject requeues it — tasks must tolerate
-    # re-delivery (see idempotency.py).
+    # re-delivery (see .claude/rules/backend/background.md → Idempotency).
     task_reject_on_worker_lost=True,
     task_time_limit=celery_config.TASK_TIME_LIMIT,
     task_soft_time_limit=int(celery_config.TASK_TIME_LIMIT * 0.8),

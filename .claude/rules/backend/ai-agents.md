@@ -41,7 +41,7 @@ app/features/<domain>/agents/my_agent/
 | Helper | Use |
 |---|---|
 | `get_model(name=None)` | Cached `BedrockConverseModel` factory (fork-safe `@lru_cache`). Never construct one directly. |
-| `get_model_settings()` | `BedrockModelSettings` with `max_tokens` + `bedrock_cache_instructions/tool_definitions="1h"`. |
+| `get_model_settings()` | `BedrockModelSettings` with `max_tokens` + `bedrock_cache_instructions/tool_definitions=True`. |
 | `get_usage_limits()` | Pass as `usage_limits=` to every `agent.run()`. |
 | `log_agent_cost(event, usage, model, **extra)` | Call after every run. Logs tokens (+ best-effort USD via `genai_prices`) and tags the Sentry span. |
 
@@ -63,7 +63,7 @@ agent = Agent(
 
 async def summarize_text(text: str) -> TextSummary:
     result = await agent.run(text, usage_limits=get_usage_limits())
-    log_agent_cost("text_summarization_completed", result.usage, result.response.model_name or MODEL)
+    log_agent_cost("text_summarization_completed", result.usage(), result.response.model_name or MODEL)
     return result.output
 ```
 

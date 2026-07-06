@@ -58,7 +58,7 @@ and you run code using `uv run ...` or `uv run python ...`, like `uv run ruff fo
 
 The goal is to return errors as proper HTTP responses. Handled errors return 4xx status codes, while unhandled exceptions return 5xx.
 
-Every error key passed to `raise_not_found` / `raise_forbidden` / etc. must be a short snake_case literal (never an f-string) registered in the `ERRORS` dict in `app/core/errors.py` (short key → `api.<feature>.<key>` i18n key). Guarded by `tests/core/test_error_registry.py`.
+Every error key passed to `raise_not_found` / `raise_forbidden` / etc. must be a short snake_case literal (never an f-string) registered in the `ERRORS` dict in `app/core/errors.py` (short key → `api.<feature>.<key>` i18n key). Enforced at raise time by `APIException` and statically by `tests/core/test_error_registry.py`.
 
 ```python
 # app/core/exceptions.py
@@ -72,7 +72,7 @@ async def handle_api_exception(request, exc) -> JSONResponse: ...
 async def handle_generic_exception(request, exc) -> JSONResponse: ...
 ```
 
-Error responses share one shape: `{"error": "<error_key>", "data": {...}}`.
+Error responses share one shape: `{"error": "api.<feature>.<key>", "data": {...}}` — the wire carries the i18n value from `ERRORS` (same convention as `MESSAGES`); the short key appears only in code and logs.
 
 ### When You Write Code
 

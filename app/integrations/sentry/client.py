@@ -2,6 +2,7 @@ import logging
 import re
 
 import sentry_sdk
+from celery.exceptions import MaxRetriesExceededError
 from sentry_sdk.integrations.celery import CeleryIntegration
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
@@ -95,5 +96,7 @@ def init_sentry() -> None:
         before_send=_scrub_event,
         enable_backpressure_handling=True,
         integrations=integrations,
-        ignore_errors=["KeyboardInterrupt", "SystemExit", "MaxRetriesExceeded"],
+        # Pass classes, not strings — Sentry matches strings against the exact type
+        # name, so a near-miss (e.g. "MaxRetriesExceeded") silently filters nothing.
+        ignore_errors=[KeyboardInterrupt, SystemExit, MaxRetriesExceededError],
     )

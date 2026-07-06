@@ -39,6 +39,6 @@ async def get_item(item: ValidItem) -> dict:
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def summarize_item(item: ValidItem) -> dict:
-    # Offload the LLM work to the `ai` queue; the endpoint returns immediately.
+    # Offload the LLM work to the `heavy` queue; the endpoint returns immediately.
     enqueue_summarize_item(str(item.id))
     return {"message": MESSAGES["success"]}
