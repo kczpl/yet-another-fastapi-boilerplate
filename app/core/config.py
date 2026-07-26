@@ -94,24 +94,16 @@ class AIConfig(Config):
 
 class ApiConfig(Config):
     SHOW_DOCS: bool = True
-    API_URL: str | None = None
-    FRONTEND_URL: str | None = None
     CORS_ORIGINS: list[str] = []
 
     @model_validator(mode="after")
     def set_environment_defaults(self) -> Self:
         if self.is_production:
-            self.API_URL = self.API_URL or "https://api.example.com"
-            self.FRONTEND_URL = self.FRONTEND_URL or "https://app.example.com"
             self.CORS_ORIGINS = self.CORS_ORIGINS or ["https://app.example.com"]
             self.SHOW_DOCS = False
         elif self.is_staging:
-            self.API_URL = self.API_URL or "https://api-staging.example.com"
-            self.FRONTEND_URL = self.FRONTEND_URL or "https://app-staging.example.com"
             self.CORS_ORIGINS = self.CORS_ORIGINS or ["https://app-staging.example.com"]
         else:
-            self.API_URL = self.API_URL or "http://localhost:8000"
-            self.FRONTEND_URL = self.FRONTEND_URL or "http://localhost:3000"
             self.CORS_ORIGINS = self.CORS_ORIGINS or [
                 "http://localhost:3000",
                 "http://localhost:5173",

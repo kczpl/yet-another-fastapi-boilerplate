@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends
-from redis.asyncio import Redis as AsyncRedisClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import database_config
@@ -56,20 +55,3 @@ async def async_db_session() -> AsyncGenerator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
-
-
-################################################################################
-# Redis (Celery broker) #
-################################################################################
-
-async_redis = AsyncRedisClient.from_url(
-    database_config.REDIS_URL,
-    decode_responses=True,
-)
-
-
-async def _get_async_redis() -> AsyncGenerator[AsyncRedisClient]:
-    yield async_redis
-
-
-AsyncRedis = Annotated[AsyncRedisClient, Depends(_get_async_redis)]

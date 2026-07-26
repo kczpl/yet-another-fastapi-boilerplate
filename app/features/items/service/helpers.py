@@ -1,17 +1,10 @@
 from typing import Any
 
+from app.features.items.schemas import ItemResponse
 from app.repositories.items.models import Item
 
 
 def serialize_item(item: Item) -> dict[str, Any]:
-    # Services return plain dicts; Pydantic validates them at the API layer via
-    # response_model. Build the dict explicitly instead of relying on from_attributes.
-    return {
-        "id": item.id,
-        "name": item.name,
-        "description": item.description,
-        "summary": item.summary,
-        "status": item.status,
-        "created_at": item.created_at,
-        "updated_at": item.updated_at,
-    }
+    # Single source of truth: ItemResponse fields. Services return plain dicts;
+    # response_model validates them again at the API boundary.
+    return ItemResponse.model_validate(item, from_attributes=True).model_dump()

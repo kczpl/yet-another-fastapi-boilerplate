@@ -20,11 +20,11 @@ class TestItemCrud:
 
         assert item.summary == "the summary"
 
-    async def test_list_filters_by_status(self, db_session: AsyncSession):
-        await ItemFactory.create(status="active")
-        await ItemFactory.create(status="archived")
+    async def test_list_items_with_count(self, db_session: AsyncSession):
+        await ItemFactory.create(name="a")
+        await ItemFactory.create(name="b")
 
-        items, total = await crud.list_items_with_count(db_session, limit=10, offset=0, status="archived")
+        items, total = await crud.list_items_with_count(db_session, limit=10, offset=0)
 
-        assert total == 1
-        assert items[0].status == "archived"
+        assert total == 2
+        assert len(items) == 2

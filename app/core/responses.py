@@ -10,8 +10,8 @@ class APIResponse(BaseModel, Generic[T]):
     data: T | None = None
 
 
-# Map short keys → i18n message keys. Routes/services reference MESSAGES["..."]
-# so the wire format stays consistent and translatable.
+# Map short keys → i18n message keys. Routes own the API envelope and reference
+# MESSAGES["..."] so the wire format stays consistent and translatable.
 MESSAGES = {
     "success": "api.general.success",
     "created": "api.general.created",

@@ -12,7 +12,7 @@ Testing conventions for the FastAPI backend.
 - All tests are async via `pytest-asyncio` (`asyncio_mode = "auto"` in `pyproject.toml` — no `@pytest.mark.asyncio` needed)
 - Test against a real PostgreSQL database (not mocks for DB operations)
 - Mock interactions with 3rd-party services (email, external APIs, LLMs)
-- Each test runs in a transaction that is rolled back afterwards (isolation via `db_session`)
+- Each test runs in a transaction that is rolled back afterwards (isolation via `db_session`); the session commits/rolls back on its own savepoint — see [Transaction Isolation](#transaction-isolation-db_session)
 - Use `factory_boy` factories to create test data
 - Never enqueue real Celery tasks — use the `mock_celery` fixture
 
@@ -42,6 +42,54 @@ docker compose up postgres-test -d   # start the test database
 uv run pytest                          # or: just test
 uv run pytest tests/features/items -v  # a subset
 ```
+
+## Transaction Isolation (`db_session`)
+
+The fixture opens a connection, starts a root transaction, and rolls it back in teardown —
+that rollback is what isolates tests. The session is bound to that already-open transaction,
+so the sessionmaker sets `join_transaction_mode="create_savepoint"`:
+
+```python
+session = async_sessionmaker(
+    bind=connection,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+    join_transaction_mode="create_savepoint",
+)()
+```
+
+The session then works on its own `SAVEPOINT` and never touches the root transaction:
+
+| Call in the code under test | With `create_savepoint` |
+|---|---|
+| `await db.commit()` | `RELEASE SAVEPOINT` — visible in the test, not on disk |
+| `await db.rollback()` | `ROLLBACK TO SAVEPOINT` — root transaction untouched |
+
+Without it the default (`conditional_savepoint`) degrades to `rollback_only` on a plain
+`connection.begin()`: a `rollback()` inside a service propagates to the root transaction and
+every row the test created disappears. This is why the session's real commit/rollback path can
+be exercised instead of monkeypatching `commit` → `flush`.
+
+**Gotcha — commit the setup when the code under test rolls back.** `ROLLBACK TO SAVEPOINT`
+rewinds to the last `commit()`, so uncommitted factory rows sitting above it are discarded too:
+
+```python
+async def test_process_batch(db_session: AsyncSession):
+    item = await ItemFactory.create()
+    await db_session.commit()  # RELEASE the setup savepoint; a new one opens below it
+
+    await ProcessBatchService(db=db_session).call([item.id])  # service rolls back
+
+    assert await db_session.get(Item, item.id) is not None  # survives
+```
+
+Not a test-only hack — in production those rows are always committed before processing starts.
+Application code using `begin_nested()` keeps working: it just pushes another savepoint.
+
+`rollback()` also expires every instance in the session (regardless of `expire_on_commit`), so
+touching `item.id` afterwards triggers a lazy refresh and raises `MissingGreenlet`. Read the
+attributes you need into locals *before* the call that rolls back.
 
 ## Factories
 

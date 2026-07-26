@@ -45,7 +45,19 @@ async def db_session(engine: AsyncEngine) -> AsyncGenerator[AsyncSession]:
     # never see each other's writes.
     connection = await engine.connect()
     transaction = await connection.begin()
-    session = async_sessionmaker(bind=connection, class_=AsyncSession, expire_on_commit=False, autoflush=False)()
+    session = async_sessionmaker(
+        bind=connection,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+        # The session works on its own SAVEPOINT instead of the fixture's transaction:
+        # commit() -> RELEASE SAVEPOINT, rollback() -> ROLLBACK TO SAVEPOINT. Without this
+        # the default ("conditional_savepoint") degrades to "rollback_only" here, so a
+        # rollback in the code under test would kill the outer transaction and wipe the
+        # test's data. Note: rollback() also discards uncommitted setup rows — commit the
+        # setup (`await db_session.commit()`) when the code under test rolls back.
+        join_transaction_mode="create_savepoint",
+    )()
 
     def _all_factory_subclasses(cls):
         for sub in cls.__subclasses__():

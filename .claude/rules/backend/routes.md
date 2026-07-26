@@ -24,12 +24,13 @@ paths:
 
 - Never return Pydantic models directly - let FastAPI serialize via `response_model`. Returning a model makes FastAPI build it twice (once by you, once validating the response).
 - Use `response_model` to define clear API contracts; set `status_code`, `summary`, `description`
-- Services return plain `dict`s; the route's `response_model` validates them
+- Services return domain data as plain `dict`s; routes wrap the API envelope (`message` / `data`) and `response_model` validates the final shape
 
 ```python
 @router.post("/items", response_model=APIResponse[ItemResponse], status_code=status.HTTP_201_CREATED)
 async def create_item(body: ItemCreate, service: CreateItemService = Depends()) -> dict:
-    return await service.call(name=body.name, description=body.description)
+    item = await service.call(name=body.name, description=body.description)
+    return {"message": MESSAGES["created"], "data": item}
 ```
 
 ### Pydantic Usage
@@ -104,10 +105,10 @@ async def list_items(
     pagination: Pagination = Depends(pagination_params()),
     service: ListItemsService = Depends(),
 ) -> dict:
-    return await service.call(page=pagination.page, page_size=pagination.page_size)
+    return {"data": await service.call(page=pagination.page, page_size=pagination.page_size)}
 ```
 
-Service response — always these 5 fields:
+Service returns the pagination payload (always these 5 fields); the route wraps it as `{"data": ...}`:
 
 ```python
 return {

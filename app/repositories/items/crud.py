@@ -26,13 +26,10 @@ async def list_items_with_count(
     *,
     limit: int,
     offset: int,
-    status: str | None = None,
 ) -> tuple[list[Item], int]:
     # Window function gets the total count in the same query — no second round-trip.
     total_count_expr = func.count().over().label("total_count")
     stmt = select(Item, total_count_expr).order_by(Item.created_at.desc()).limit(limit).offset(offset)
-    if status is not None:
-        stmt = stmt.where(Item.status == status)
 
     rows = (await db.execute(stmt)).all()
     if not rows:
