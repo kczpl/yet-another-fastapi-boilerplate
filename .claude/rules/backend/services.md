@@ -11,7 +11,8 @@ The service organizes logic into private step methods, with a main `call()` meth
 - Encapsulate reusable logic in `helpers.py` or repository functions, but each service represents one use case
 - Keep service methods simple and minimal for easier testing and maintenance
 - Prefer small denormalized methods over one big method that does everything
-- Return a `dict` that gets validated by Pydantic at the API layer (via `response_model`)
+- Return domain data as a plain `dict` (or list of dicts). Do **not** wrap in the API envelope (`message` / outer `data`) — routes own the wire format via `MESSAGES` and `APIResponse`
+- Route-facing list services may return the pagination payload shape (`items`, `page`, `page_size`, `total_count`, `total_pages`); the route still wraps it as `{"data": ...}`
 
 IMPORTANT: role checks and auth happen at the API/dependency layer, never in services.
 
@@ -38,7 +39,7 @@ class Service:
         self.db = db
 ```
 
-Example — `call()` is a short orchestrator; steps are private methods:
+Example — `call()` is a short orchestrator; steps are private methods. Returns domain data only:
 
 ```python
 # app/features/items/service/create.py
@@ -46,7 +47,14 @@ class CreateItemService(Service):
     async def call(self, *, name: str, description: str | None = None) -> dict:
         item = await crud.create_item(self.db, name=name, description=description)
         await self.db.commit()
-        return {"message": MESSAGES["created"], "data": serialize_item(item)}
+        return serialize_item(item)
+```
+
+```python
+# app/features/items/routes/items.py — route owns the envelope
+async def create_item(body: ItemCreate, service: CreateItemService = Depends()) -> dict:
+    item = await service.call(name=body.name, description=body.description)
+    return {"message": MESSAGES["created"], "data": item}
 ```
 
 ### Passing domain objects to services
@@ -65,7 +73,7 @@ Architecture layers:
 - Celery task functions (`app/workers/registry.py`) — thin wrappers that call `run_service(ServiceClass, *args, **kwargs)`
 - Queue functions (`app/workers/queue.py`) — public API to enqueue tasks from application code
 
-**Async runner lifecycle:** each Celery worker process (prefork) gets its own `asyncio.Runner` via the `worker_process_init` signal. The runner keeps one event loop alive across all tasks in that process, so async DB/Redis pools are reused. On `worker_process_shutdown` it disposes the engine and closes Redis.
+**Async runner lifecycle:** each Celery worker process (prefork) gets its own `asyncio.Runner` via the `worker_process_init` signal. The runner keeps one event loop alive across all tasks in that process, so the async DB pool is reused. On `worker_process_shutdown` it disposes the engine.
 
 Background task services live alongside route-facing services:
 

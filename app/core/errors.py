@@ -16,5 +16,4 @@ ERRORS = {
     "file_too_large": "api.general.file_too_large",
     ### Items (example feature) ###
     "item_not_found": "api.items.item_not_found",
-    "item_already_summarized": "api.items.item_already_summarized",
 }

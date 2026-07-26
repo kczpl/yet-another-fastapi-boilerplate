@@ -35,11 +35,10 @@ def setup_async_runner(**kwargs):
     _runner = asyncio.Runner()
 
     # Forked children inherit the parent's connection pool with stale file
-    # descriptors — dispose the Postgres engine and Redis client after fork.
-    from app.core.db.async_ import async_engine, async_redis
+    # descriptors — dispose the Postgres engine after fork.
+    from app.core.db.async_ import async_engine
 
     _runner.run(async_engine.dispose())
-    _runner.run(async_redis.aclose())
 
 
 @worker_process_shutdown.connect
@@ -47,9 +46,8 @@ def cleanup_async_runner(**kwargs):
     global _runner
     if _runner is None:
         return
-    from app.core.db.async_ import async_engine, async_redis
+    from app.core.db.async_ import async_engine
 
     _runner.run(async_engine.dispose())
-    _runner.run(async_redis.aclose())
     _runner.close()
     _runner = None

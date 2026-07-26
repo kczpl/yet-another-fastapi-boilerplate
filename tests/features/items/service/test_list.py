@@ -11,14 +11,13 @@ class TestListItemsService:
 
         result = await ListItemsService(db=db_session).call(page=1, page_size=2)
 
-        data = result["data"]
-        assert data["total_count"] == 3
-        assert data["total_pages"] == 2
-        assert len(data["items"]) == 2
+        assert result["total_count"] == 3
+        assert result["total_pages"] == 2
+        assert len(result["items"]) == 2
 
     async def test_list_empty(self, db_session: AsyncSession):
         result = await ListItemsService(db=db_session).call(page=1, page_size=10)
 
-        assert result["data"]["total_count"] == 0
-        assert result["data"]["total_pages"] == 0
-        assert result["data"]["items"] == []
+        assert result["total_count"] == 0
+        assert result["total_pages"] == 0
+        assert result["items"] == []

@@ -16,7 +16,8 @@ router = APIRouter(tags=["items"])
 
 @router.post("/items", response_model=APIResponse[ItemResponse], status_code=status.HTTP_201_CREATED)
 async def create_item(body: ItemCreate, service: CreateItemService = Depends()) -> dict:
-    return await service.call(name=body.name, description=body.description)
+    item = await service.call(name=body.name, description=body.description)
+    return {"message": MESSAGES["created"], "data": item}
 
 
 @router.get("/items", response_model=APIResponse[ItemListResponse])
@@ -24,7 +25,7 @@ async def list_items(
     pagination: Pagination = Depends(pagination_params()),
     service: ListItemsService = Depends(),
 ) -> dict:
-    return await service.call(page=pagination.page, page_size=pagination.page_size)
+    return {"data": await service.call(page=pagination.page, page_size=pagination.page_size)}
 
 
 @router.get("/items/{item_id}", response_model=APIResponse[ItemResponse])

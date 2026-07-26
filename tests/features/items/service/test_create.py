@@ -11,8 +11,8 @@ class TestCreateItemService:
 
         result = await service.call(name="Widget", description="A useful widget")
 
-        assert result["data"]["name"] == "Widget"
-        assert result["data"]["status"] == "active"
+        assert result["name"] == "Widget"
+        assert result["status"] == "active"
 
         item = (await db_session.execute(select(Item).where(Item.name == "Widget"))).scalar_one()
         assert item.description == "A useful widget"
@@ -23,4 +23,4 @@ class TestCreateItemService:
 
         result = await service.call(name="Bare")
 
-        assert result["data"]["description"] is None
+        assert result["description"] is None

@@ -117,7 +117,7 @@ class APIResponse(BaseModel, Generic[T]):
     data: T | None = None
 ```
 
-Usage patterns in routes (services return plain dicts; `response_model` validates them):
+Usage patterns in **routes** (services return domain data only; routes own the envelope; `response_model` validates the final shape):
 
 ```python
 return {"data": result}                                   # data-only
@@ -125,7 +125,7 @@ return {"message": MESSAGES["created"], "data": result}   # message + data
 return {"message": MESSAGES["success"]}                   # message-only
 ```
 
-Messages use i18n keys from the `MESSAGES` dict in `app/core/responses.py` (e.g. `"api.general.success"`).
+Messages use i18n keys from the `MESSAGES` dict in `app/core/responses.py` (e.g. `"api.general.success"`). Do not build this envelope inside services.
 
 ## Logging
 
@@ -149,7 +149,7 @@ log.info("processing_started", step="summarize")
 | Module | Purpose |
 |--------|---------|
 | `config.py` | Domain-split `BaseSettings`: `Config` (base), `DatabaseConfig`, `ApiConfig`, `CeleryConfig`, `AIConfig`, `AWSConfig` |
-| `db/` | Async SQLAlchemy engine, session factory (psycopg3), Redis client |
+| `db/` | Async SQLAlchemy engine + session factory (psycopg3). Redis is Celery's broker via `REDIS_URL`, not an app-level client. |
 | `errors.py` | `ERRORS` registry (short key → i18n key) |
 | `exceptions.py` | `APIException`, `raise_*` helpers, global exception handlers |
 | `logger.py` | Structlog setup, context binding |

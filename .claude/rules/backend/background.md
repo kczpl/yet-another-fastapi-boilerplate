@@ -56,7 +56,7 @@ Don't dedup on the Celery `task_id` — retries reuse the same id.
 
 ### Fork safety
 
-`worker_process_init` in `runner.py` disposes the inherited Postgres engine and Redis client after fork. **Don't open DB/Redis/HTTP connections at module import time** — connections opened in the parent process are inherited as broken sockets by every child.
+`worker_process_init` in `runner.py` disposes the inherited Postgres engine after fork. **Don't open DB/HTTP connections at module import time** — connections opened in the parent process are inherited as broken sockets by every child. Celery manages its own Redis broker connections.
 
 ## Async / Sync
 
