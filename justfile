@@ -19,21 +19,30 @@ workers:
 cron:
   uv run celery -A app.workers.celery:celery beat --loglevel=info
 
-# Format + lint
+# Format + lint, fixing what can be fixed
 ruff:
   uv run ruff format
+  uv run ruff check --fix
+
+# Lint without touching files (what CI runs)
+lint:
+  uv run ruff format --check
   uv run ruff check
 
 # Type-check
 types:
-  uvx pyright
+  uv run pyright
+
+# Cognitive complexity gate — limit and paths in pyproject.toml ([tool.complexipy])
+complexity:
+  uv run complexipy
 
 # Run tests (spins up the test database)
 test *flags="":
   docker compose up postgres-test -d
   uv run pytest {{ flags }}
 
-ci: ruff types test
+ci: lint types complexity test
 
 # Apply migrations
 migrate:

@@ -8,8 +8,8 @@ from app.services.base import Service
 
 class SummarizeItemService(Service):
     # Background task service (runs via Celery `summarize_item_task`). Same shape as
-    # route-facing services: short call() orchestrator + private steps. async_db_session
-    # commits on success, so this service does not commit itself.
+    # route-facing services: short call() orchestrator + private steps. session_scope()
+    # (via run_service) commits on success, so this service does not commit itself.
     async def call(self, item_id: str) -> dict:
         item = await crud.get_item_by_id(self.db, UUID(item_id))
         # Idempotent: re-delivery / retry after a worker crash must converge, not

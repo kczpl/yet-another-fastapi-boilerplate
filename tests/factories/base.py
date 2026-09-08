@@ -16,7 +16,7 @@ class SQLAlchemyFactoryOptions(factory.base.FactoryOptions):
 class BaseMetaFactory(Generic[T], factory.base.FactoryMetaClass):
     _meta: SQLAlchemyFactoryOptions
 
-    def __call__(cls, *args: Any, **kwargs: Any) -> T:
+    def __call__(cls, *args: Any, **kwargs: Any) -> T:  # noqa: N805 — metaclass
         return super().__call__(*args, **kwargs)
 
 
@@ -38,16 +38,18 @@ class BaseFactory(SQLAlchemyModelFactory):
         if session is None:
             raise RuntimeError(f"{cls.__name__}._meta.sqlalchemy_session is not set")
 
+        instance = cls.build(**cls._with_derived_fks(kwargs))
+        session.add(instance)
+        await session.flush()
+        await session.refresh(instance)  # load defaults applied by the model / DB
+        return instance
+
+    @classmethod
+    def _with_derived_fks(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
         for related_kwarg, fk_map in cls._derive_fks.items():
             related = kwargs.get(related_kwarg)
             if related is None:
                 continue
             for fk_field, attr in fk_map.items():
-                if fk_field not in kwargs:
-                    kwargs[fk_field] = getattr(related, attr)
-
-        instance = cls.build(**kwargs)
-        session.add(instance)
-        await session.flush()
-        await session.refresh(instance)
-        return instance
+                kwargs.setdefault(fk_field, getattr(related, attr))
+        return kwargs

@@ -4,8 +4,8 @@ from app.workers.queues import QUEUE_DEFAULT, QUEUE_HEAVY
 from app.workers.runner import run_service
 
 # Service classes are imported INSIDE task bodies, not at module level. This is the
-# one sanctioned deferred-import location: feature services import app/workers/queue.py
-# at the top, queue.py imports this module for the task objects, so a module-level
+# one sanctioned deferred-import location: feature services import app/workers/enqueue.py
+# at the top, enqueue.py imports this module for the task objects, so a module-level
 # service import here would close the features -> queue -> registry -> features cycle.
 
 

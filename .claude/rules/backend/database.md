@@ -6,7 +6,7 @@ paths:
 
 ## Database Conventions
 
-Naming conventions defined in `app/core/db/base.py` (applied automatically by SQLAlchemy MetaData, and by Alembic ops because `env.py` configures `target_metadata`):
+Naming conventions defined in `app/core/db.py` (applied automatically by SQLAlchemy MetaData, and by Alembic ops because `env.py` configures `target_metadata`):
 
 | Object | Pattern | Example |
 |--------|---------|---------|
@@ -32,7 +32,12 @@ id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, defa
 
 ### No Enums
 
-Never use PostgreSQL ENUM types — use `String(n)` + `CheckConstraint`.
+Never use PostgreSQL ENUM types — use `String(n)` + `CheckConstraint`. Keep the allowed values in one tuple and build the constraint from it so model and constant can't drift:
+
+```python
+VALID_ITEM_STATUSES = ("active", "archived")
+__table_args__ = (CheckConstraint(column("status").in_(VALID_ITEM_STATUSES), name="status"), {"schema": "public"})
+```
 
 ### Indexing
 
@@ -76,7 +81,7 @@ updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=F
 Repository functions (`app/repositories/*/crud.py`) never call `commit()` — use `await db.flush()` to materialize IDs and defaults. The transaction belongs to the caller:
 
 - Route-facing services commit explicitly (`await self.db.commit()`).
-- Celery tasks get auto-commit from `async_db_session` (via `run_service`).
+- Celery tasks get auto-commit from `session_scope()` (via `run_service`).
 
 Never add a `commit: bool` parameter to a repository function — if a caller needs different batching, it controls the transaction itself.
 
@@ -109,12 +114,12 @@ result = await db.execute(query, {"start_date": ..., "status": ..., "min_orders"
 Config is `alembic/alembic.ini`. `DATABASE_URL` (env) overrides `sqlalchemy.url`.
 
 - Keep migrations static and revertable - no dynamic schema generation
-- Generate with `uv run alembic -c alembic/alembic.ini revision --autogenerate -m "create items table"` (or `just makemigration "..."`)
+- Generate with `uv run alembic -c alembic/alembic.ini revision --autogenerate -m "create items table"` (or `just makemigration "..."`) — `post_write_hooks` in `alembic.ini` run ruff on the new file, so generated migrations pass `just lint` as-is
 - Always provide both `upgrade()` and `downgrade()`
 - Descriptive slug — the file template is `YYYY_MM_DD_HHMM-<rev>_<slug>.py`
 
 ```python
-# upgrade: SHORT name — the base.py convention expands it to "items_status_check"
+# upgrade: SHORT name — the naming convention in app/core/db.py expands it to "items_status_check"
 op.create_check_constraint("status", "items", "status IN ('active', 'archived')", schema="public")
 # for nullable columns add OR column IS NULL
 op.create_check_constraint("kind", "items", "kind IN ('a', 'b') OR kind IS NULL", schema="public")

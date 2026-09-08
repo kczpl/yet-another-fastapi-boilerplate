@@ -11,7 +11,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Config(BaseSettings):
     VERSION: str = "0.0.1"
     ENVIRONMENT: str = "development"
-    TIMEZONE: str = "UTC"
     LOG_LEVEL: str = "INFO"
 
     SENTRY_DSN: str | None = None
@@ -36,41 +35,36 @@ class Config(BaseSettings):
 # domain-specific configs #
 ################################################################################
 
+# Per-environment defaults; unknown ENVIRONMENT values fall back to "development".
+_POOL_DEFAULTS = {
+    "production": {"POOL_SIZE": 20, "POOL_MAX_OVERFLOW": 10, "POOL_RECYCLE": 3600},
+    "staging": {"POOL_SIZE": 15, "POOL_MAX_OVERFLOW": 5, "POOL_RECYCLE": 3600},
+    "development": {"POOL_SIZE": 5, "POOL_MAX_OVERFLOW": 2, "POOL_RECYCLE": 1800},
+}
+
 
 class DatabaseConfig(Config):
     DATABASE_URL: str
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # None → environment default from _POOL_DEFAULTS; any explicit value wins.
     POOL_SIZE: int | None = None
     POOL_MAX_OVERFLOW: int | None = None
-    POOL_TIMEOUT: int | None = None
+    POOL_TIMEOUT: int = 30
     POOL_RECYCLE: int | None = None
 
     @model_validator(mode="after")
     def set_environment_defaults(self) -> Self:
-        if self.is_production:
-            self.POOL_SIZE = self.POOL_SIZE or 20
-            self.POOL_MAX_OVERFLOW = self.POOL_MAX_OVERFLOW or 10
-            self.POOL_TIMEOUT = self.POOL_TIMEOUT or 30
-            self.POOL_RECYCLE = self.POOL_RECYCLE or 3600
-        elif self.is_staging:
-            self.POOL_SIZE = self.POOL_SIZE or 15
-            self.POOL_MAX_OVERFLOW = self.POOL_MAX_OVERFLOW or 5
-            self.POOL_TIMEOUT = self.POOL_TIMEOUT or 30
-            self.POOL_RECYCLE = self.POOL_RECYCLE or 3600
-        else:
-            self.POOL_SIZE = self.POOL_SIZE or 5
-            self.POOL_MAX_OVERFLOW = self.POOL_MAX_OVERFLOW or 2
-            self.POOL_TIMEOUT = self.POOL_TIMEOUT or 30
-            self.POOL_RECYCLE = self.POOL_RECYCLE or 1800
-
+        defaults = _POOL_DEFAULTS.get(self.ENVIRONMENT.lower(), _POOL_DEFAULTS["development"])
+        for field, value in defaults.items():
+            if getattr(self, field) is None:
+                setattr(self, field, value)
         return self
 
 
 class AWSConfig(Config):
     # Credentials are only needed for AWS Bedrock (AI agents). Leave unset to fall
     # back to the default boto3 credential chain (env / profile / instance role).
-    AWS_REGION: str = "eu-central-1"
     AWS_ACCESS_KEY: str | None = None
     AWS_SECRET_KEY: str | None = None
 
@@ -91,6 +85,12 @@ class AIConfig(Config):
 # application configs #
 ################################################################################
 
+_CORS_DEFAULTS = {
+    "production": ["https://app.example.com"],
+    "staging": ["https://app-staging.example.com"],
+    "development": ["http://localhost:3000", "http://localhost:5173"],
+}
+
 
 class ApiConfig(Config):
     SHOW_DOCS: bool = True
@@ -98,17 +98,11 @@ class ApiConfig(Config):
 
     @model_validator(mode="after")
     def set_environment_defaults(self) -> Self:
+        self.CORS_ORIGINS = self.CORS_ORIGINS or _CORS_DEFAULTS.get(
+            self.ENVIRONMENT.lower(), _CORS_DEFAULTS["development"]
+        )
         if self.is_production:
-            self.CORS_ORIGINS = self.CORS_ORIGINS or ["https://app.example.com"]
             self.SHOW_DOCS = False
-        elif self.is_staging:
-            self.CORS_ORIGINS = self.CORS_ORIGINS or ["https://app-staging.example.com"]
-        else:
-            self.CORS_ORIGINS = self.CORS_ORIGINS or [
-                "http://localhost:3000",
-                "http://localhost:5173",
-            ]
-
         return self
 
 

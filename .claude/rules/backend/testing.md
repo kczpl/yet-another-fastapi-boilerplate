@@ -14,19 +14,19 @@ Testing conventions for the FastAPI backend.
 - Mock interactions with 3rd-party services (email, external APIs, LLMs)
 - Each test runs in a transaction that is rolled back afterwards (isolation via `db_session`); the session commits/rolls back on its own savepoint — see [Transaction Isolation](#transaction-isolation-db_session)
 - Use `factory_boy` factories to create test data
-- Never enqueue real Celery tasks — use the `mock_celery` fixture
+- Celery never reaches the broker: the autouse `mock_celery` fixture patches `Task.apply_async` for every test — request it by name only to assert on enqueues
 
 ## Test Structure
 
 ```
 tests/
-├── conftest.py           # engine, db_session, client, mock_celery, factory auto-registration
-├── factories/            # factory definitions (auto-discovered)
+├── conftest.py           # engine, db_session, client, mock_celery (autouse), factory session binding
+├── factories/            # factory definitions
 │   ├── base.py           # BaseFactory with async create()
 │   └── {domain}.py       # domain factories
-├── core/                 # core module tests
-├── features/             # feature service + route tests (mirrors app/features/)
-│   └── {domain}/service/
+├── core/                 # core module tests (error envelope, middleware, db helpers)
+├── features/             # feature service + route + agent tests (mirrors app/features/)
+│   └── {domain}/{service/, agents/, test_routes.py}
 └── repositories/         # data layer tests (crud)
 ```
 
@@ -51,8 +51,7 @@ so the sessionmaker sets `join_transaction_mode="create_savepoint"`:
 
 ```python
 session = async_sessionmaker(
-    bind=connection,
-    class_=AsyncSession,
+    connection,
     expire_on_commit=False,
     autoflush=False,
     join_transaction_mode="create_savepoint",
@@ -100,12 +99,13 @@ class ItemFactory(BaseFactory, metaclass=BaseMetaFactory[Item]):
     class Meta:
         model = Item
 
-    id = LazyFunction(uuid7)
     name = Sequence(lambda n: f"Item {n}")
-    created_at = LazyFunction(utc_now)
+    description = "An example item."
 ```
 
-**Auto-registration:** `conftest.py` walks `tests/factories/` and imports every module, then binds the session to each `BaseFactory` subclass per test. New factories are picked up automatically.
+Declare only fields without a model default — `id`, `status` and timestamps come from the model on flush and `create()` refreshes the instance afterwards. Pass any field explicitly to override it (`ItemFactory.create(summary="done")`).
+
+**Session binding:** `db_session` binds the test session to every `BaseFactory` subclass that has been imported. Test modules import the factories they use, so nothing else is needed for a new factory.
 
 **Deriving FKs from related objects** — declare it on the factory instead of overriding `create()`:
 
@@ -149,8 +149,10 @@ class TestItemRoutes:
         item = await ItemFactory.create()
         resp = await client.post(f"/api/v1/items/{item.id}/summarize")
         assert resp.status_code == 202
-        mock_celery.assert_called_once_with(str(item.id))
+        mock_celery.assert_called_once_with((str(item.id),), {})  # apply_async(args, kwargs)
 ```
+
+Error envelopes (`404` for an unknown route, `405`, `422` details, generic `500`) are covered once in `tests/core/test_exceptions.py` — route tests only assert the status code and the feature-specific `error` key.
 
 ## Test Naming
 
@@ -163,16 +165,16 @@ Cover: the valid case, invalid input, and edge cases (empty, already-done, confl
 
 Don't hit a real LLM in normal CI. Two layers:
 
-1. **Output / validator unit tests** — construct the agent's output model with plain data and assert the `@model_validator` / `_check_*` helpers behave (normalization, `requires_review` on final retry). Fast, no DB, no model.
-2. **Service tests** — patch the async wrapper so the service runs without a model:
+1. **Output / validator unit tests** (`tests/features/<domain>/agents/`) — construct the agent's output model with plain data and assert the `@model_validator` / `_check_*` helpers behave (normalization, `requires_review` on final retry). Fast, no DB, no model.
+2. **Service tests** — patch the async wrapper so the service runs without a model (see `tests/features/items/service/test_summarize.py`):
 
 ```python
-@patch("app.features.items.service.summarize.summarize_text")
-async def test_summarize_stores_summary(mock_summarize, db_session):
-    mock_summarize.return_value = TextSummary(title="t", summary="s", keywords=["k"])
+@patch("app.features.items.service.summarize.summarize_text", return_value=TextSummary(title="t", summary="s", keywords=["k"]))
+async def test_summarize_stores_summary(self, mock_summarize, db_session):
     item = await ItemFactory.create(description="long text", summary=None)
     await SummarizeItemService(db=db_session).call(str(item.id))
     assert item.summary == "s"
+    mock_summarize.assert_awaited_once_with("long text")
 ```
 
 Real-LLM integration tests (if you add them) should be env-gated (e.g. `RUN_AGENT_TEST=1`) so they never run in default CI.

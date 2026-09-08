@@ -27,7 +27,7 @@ def get_some_client() -> SomeClient:
 Error tracking + tracing. Init at module load — `app/main.py` (API) and `app/workers/celery.py` (workers + beat). 5xx errors are auto-captured by the Starlette / FastAPI / Celery integrations. Only initialized in `staging`/`production` with a `SENTRY_DSN` set.
 
 - PII scrubbing in `_scrub_event` (`app/integrations/sentry/client.py`) is keyword-based and best-effort. Don't log secrets, tokens, or raw request bodies via structlog — oddly-named fields slip through.
-- `send_default_pii=False` and `include_local_variables=False` by default. The pydantic-ai integration is added when AI extras are installed; enabling prompt capture (`include_prompts=True` + `send_default_pii=True`) sends model I/O to Sentry — opt in deliberately.
+- `send_default_pii=False` and `include_local_variables=False` by default. The pydantic-ai integration is always on; enabling prompt capture (`include_prompts=True` + `send_default_pii=True`) sends model I/O to Sentry — opt in deliberately.
 - `CeleryIntegration(monitor_beat_tasks=True)` turns each beat entry into a Sentry Cron monitor.
 
 ## AWS Bedrock (AI)

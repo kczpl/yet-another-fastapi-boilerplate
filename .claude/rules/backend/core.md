@@ -45,6 +45,14 @@ and you run code using `uv run ...` or `uv run python ...`, like `uv run ruff fo
 - Use modern syntax: `list[str]` over `List[str]`, `dict[str, Any]`, `str | None`
 - Use `TypedDict` for structured dictionaries
 
+### Complexity
+
+Cognitive complexity (SonarSource metric — nesting and branching, not line count) is gated by `complexipy`: **max 10 per function**, configured in `pyproject.toml` (`[tool.complexipy]`), run via `just complexity` and in CI.
+
+- A function over the limit is split, not annotated away: extract a named helper per step, replace nested `if`s with early returns / guard clauses, replace `if/elif` ladders with a dict lookup (see `_HTTP_STATUS_ERRORS` in `app/core/exceptions.py`, `_POOL_DEFAULTS` in `app/core/config.py`).
+- Comprehensions and ternaries nested inside branches count as nesting — pull them into a helper when they need a condition of their own.
+- Aim well below the limit: most functions in this codebase score 0–3.
+
 ## General
 
 - Use imports only on the top of the file, not in the middle (the one exception is the deferred service import inside Celery task bodies — see background.md)
@@ -72,7 +80,7 @@ async def handle_api_exception(request, exc) -> JSONResponse: ...
 async def handle_generic_exception(request, exc) -> JSONResponse: ...
 ```
 
-Error responses share one shape: `{"error": "api.<feature>.<key>", "data": {...}}` — the wire carries the i18n value from `ERRORS` (same convention as `MESSAGES`); the short key appears only in code and logs.
+Error responses share one shape: `{"error": "api.<feature>.<key>", "data": {...}}` — the wire carries the i18n value from `ERRORS` (same convention as `MESSAGES`); the short key appears only in code and logs. Errors raised by the framework itself (unknown route → 404, wrong method → 405, request validation → 422) go through the same envelope via `handle_http_exception` / `handle_validation_error`; anything unhandled is a `500` with `api.general.internal_server_error` and a logged traceback.
 
 ### When You Write Code
 
@@ -98,14 +106,16 @@ Error responses share one shape: `{"error": "api.<feature>.<key>", "data": {...}
 
 ## Middleware
 
-Middleware lives in `app/core/security.py` and is registered via `setup_security_middleware(app)`.
+Middleware lives in `app/core/security.py` and is registered via `setup_security_middleware(app)`. All of it is plain ASGI (no `BaseHTTPMiddleware` — it breaks streaming and contextvars).
 
 Execution order (outermost runs first):
 
 1. **`CORSMiddleware`** (Starlette) — answers browser preflight before route matching
-2. **`LoggingMiddleware`** — Generates/propagates `X-Request-ID`, binds request context via structlog, logs completion with method, path, status code, duration, client IP (supports `X-Forwarded-For`). Skips the `/up` health probe.
-3. **`RequestSizeLimitMiddleware`** — Enforces a `10MB` default body limit (`200MB` for paths in `LARGE_BODY_PATHS`). Returns `413` on overage.
-4. **`SecurityMiddleware`** (fastapi-guard) — rate limiting, security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, HSTS, `Referrer-Policy`)
+2. **`SecurityHeadersMiddleware`** — adds the browser hardening headers in `SECURITY_HEADERS` (HSTS, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Cross-Origin-Resource-Policy`)
+3. **`LoggingMiddleware`** — Generates/propagates `X-Request-ID`, binds request context via structlog, logs completion with method, path, status code, duration, client IP (supports `X-Forwarded-For`). Skips the `/up` health probe.
+4. **`RequestSizeLimitMiddleware`** — Enforces a `10MB` default body limit (`200MB` for paths in `LARGE_BODY_PATHS`) from `Content-Length`. Returns `413` in the error envelope.
+
+Rate limiting, IP/country blocking and WAF rules are edge concerns (load balancer, reverse proxy, CDN) — an in-process limiter is per-replica and, behind a proxy, counts every client as one IP. Don't add them to the app.
 
 ## API Response Wrapper
 
@@ -149,11 +159,11 @@ log.info("processing_started", step="summarize")
 | Module | Purpose |
 |--------|---------|
 | `config.py` | Domain-split `BaseSettings`: `Config` (base), `DatabaseConfig`, `ApiConfig`, `CeleryConfig`, `AIConfig`, `AWSConfig` |
-| `db/` | Async SQLAlchemy engine + session factory (psycopg3). Redis is Celery's broker via `REDIS_URL`, not an app-level client. |
+| `db.py` | `Base` + naming convention, async engine, `SessionLocal`, `get_db` / `AsyncDb` dependency, `session_scope()` for workers. Redis is Celery's broker via `REDIS_URL`, not an app-level client. |
 | `errors.py` | `ERRORS` registry (short key → i18n key) |
 | `exceptions.py` | `APIException`, `raise_*` helpers, global exception handlers |
 | `logger.py` | Structlog setup, context binding |
-| `security.py` | Middleware stack |
+| `security.py` | Middleware stack (security headers, request logging + `X-Request-ID`, body size limit, CORS) |
 | `responses.py` | `APIResponse[T]` generic wrapper + `MESSAGES` |
 | `pagination.py` | `Pagination` dataclass + `pagination_params` dependency factory |
 | `agents.py` | Shared pydantic-ai / Bedrock config (`get_model`, `log_agent_cost`, ...) — agents themselves live in `features/*/agents/` |

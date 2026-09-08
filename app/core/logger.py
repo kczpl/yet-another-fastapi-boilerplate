@@ -3,14 +3,14 @@ import logging
 import structlog
 from structlog.dev import ConsoleRenderer
 
-from app.core.config import api_config as settings
+from app.core.config import api_config
 
 
-def setup_logging(log_level: str | None = None, colors: bool | None = None, app: str = "api"):
+def setup_logging(log_level: str | None = None, colors: bool | None = None, app: str = "api") -> None:
     if log_level is None:
-        log_level = settings.LOG_LEVEL
+        log_level = api_config.LOG_LEVEL
     if colors is None:
-        colors = settings.is_development
+        colors = api_config.is_development
 
     def _add_app(_logger, _name, event_dict):
         event_dict.setdefault("app", app)
@@ -60,11 +60,8 @@ def setup_logging(log_level: str | None = None, colors: bool | None = None, app:
         lg.handlers.clear()
         lg.propagate = True
 
-    return structlog.get_logger()
-
 
 log = structlog.get_logger()
 
 bind_context = structlog.contextvars.bind_contextvars
 clear_context = structlog.contextvars.clear_contextvars
-unbind_context = structlog.contextvars.unbind_contextvars

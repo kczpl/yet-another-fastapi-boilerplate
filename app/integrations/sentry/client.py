@@ -1,17 +1,19 @@
 import logging
 import re
+from collections.abc import Iterator
 
 import sentry_sdk
 from celery.exceptions import MaxRetriesExceededError
 from sentry_sdk.integrations.celery import CeleryIntegration
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.pydantic_ai import PydanticAIIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from app.core.config import api_config
 
-# substring match against lowercased key — covers headers, cookies, body fields,
+# Substring match against lowercased keys — covers headers, cookies, body fields,
 # and local variable names captured in stack frames.
 _SENSITIVE_KEY_PATTERN = re.compile(
     r"authorization|cookie|session|password|passwd|secret|token|api[_-]?key|"
@@ -19,73 +21,52 @@ _SENSITIVE_KEY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _REDACTED = "[Filtered]"
+_SERVER_ERRORS = {*range(500, 600)}
 
 
-def _scrub_mapping(value):
+def _scrub(value):
+    # Recursively replaces values under sensitive keys; other values pass through.
     if isinstance(value, dict):
-        return {k: (_REDACTED if _SENSITIVE_KEY_PATTERN.search(k) else _scrub_mapping(v)) for k, v in value.items()}
+        return {key: _scrub_field(key, item) for key, item in value.items()}
     if isinstance(value, list):
-        return [_scrub_mapping(v) for v in value]
+        return [_scrub(item) for item in value]
     return value
 
 
+def _scrub_field(key: str, value):
+    return _REDACTED if _SENSITIVE_KEY_PATTERN.search(key) else _scrub(value)
+
+
+def _stack_frames(event) -> Iterator[dict]:
+    for exception in event.get("exception", {}).get("values") or []:
+        yield from exception.get("stacktrace", {}).get("frames") or []
+
+
 def _scrub_event(event, _hint):
-    request = event.get("request")
-    if isinstance(request, dict):
-        for field in ("headers", "cookies", "data", "query_string", "env"):
-            if field in request:
-                request[field] = _scrub_mapping(request[field])
-
-    for exc in (event.get("exception", {}) or {}).get("values", []) or []:
-        for frame in (exc.get("stacktrace", {}) or {}).get("frames", []) or []:
-            if "vars" in frame:
-                frame["vars"] = _scrub_mapping(frame["vars"])
-
-    extra = event.get("extra")
-    if isinstance(extra, dict):
-        event["extra"] = _scrub_mapping(extra)
-
+    for key in ("request", "extra"):
+        if key in event:
+            event[key] = _scrub(event[key])
+    for frame in _stack_frames(event):
+        if "vars" in frame:
+            frame["vars"] = _scrub(frame["vars"])
     return event
 
 
 def init_sentry() -> None:
-    if api_config.ENVIRONMENT not in ("production", "staging"):
+    if not (api_config.is_production or api_config.is_staging):
         return
     if not api_config.SENTRY_DSN:
         return
 
-    if api_config.is_production:
-        error_sample_rate, traces_sample_rate, profiles_sample_rate, max_breadcrumbs = 1.0, 0.1, 0.1, 100
-    else:
-        error_sample_rate, traces_sample_rate, profiles_sample_rate, max_breadcrumbs = 0.5, 0.05, 0.05, 50
-
-    integrations = [
-        StarletteIntegration(transaction_style="endpoint", failed_request_status_codes={*range(500, 600)}),
-        FastApiIntegration(transaction_style="endpoint", failed_request_status_codes={*range(500, 600)}),
-        SqlalchemyIntegration(),
-        CeleryIntegration(monitor_beat_tasks=True, propagate_traces=True),
-        # Real exceptions are captured by the framework integrations from the raised
-        # exception (better grouping than synthesizing an issue from a log line).
-        LoggingIntegration(level=logging.INFO, event_level=None),
-    ]
-    # pydantic-ai integration is optional — only present when AI extras are installed.
-    try:
-        from sentry_sdk.integrations.pydantic_ai import PydanticAIIntegration
-
-        # include_prompts also needs send_default_pii=True to record prompt/response
-        # text (sends model I/O to Sentry). Keep it off unless you need that.
-        integrations.append(PydanticAIIntegration(include_prompts=False))
-    except ImportError:
-        pass
-
+    production = api_config.is_production
     sentry_sdk.init(
         dsn=api_config.SENTRY_DSN,
         environment=api_config.ENVIRONMENT,
         release=api_config.SENTRY_RELEASE or f"backend@{api_config.VERSION}",
-        sample_rate=error_sample_rate,
-        traces_sample_rate=traces_sample_rate,
-        profiles_sample_rate=profiles_sample_rate,
-        max_breadcrumbs=max_breadcrumbs,
+        sample_rate=1.0 if production else 0.5,
+        traces_sample_rate=0.1 if production else 0.05,
+        profiles_sample_rate=0.1 if production else 0.05,
+        max_breadcrumbs=100 if production else 50,
         attach_stacktrace=True,
         # local variables in tracebacks can leak request bodies, tokens, decrypted
         # values; keep them off in shared environments.
@@ -95,7 +76,18 @@ def init_sentry() -> None:
         max_request_body_size="medium",
         before_send=_scrub_event,
         enable_backpressure_handling=True,
-        integrations=integrations,
+        integrations=[
+            StarletteIntegration(transaction_style="endpoint", failed_request_status_codes=_SERVER_ERRORS),
+            FastApiIntegration(transaction_style="endpoint", failed_request_status_codes=_SERVER_ERRORS),
+            SqlalchemyIntegration(),
+            CeleryIntegration(monitor_beat_tasks=True, propagate_traces=True),
+            # Real exceptions are captured by the framework integrations from the raised
+            # exception (better grouping than synthesizing an issue from a log line).
+            LoggingIntegration(level=logging.INFO, event_level=None),
+            # include_prompts also needs send_default_pii=True to record prompt/response
+            # text (sends model I/O to Sentry). Keep it off unless you need that.
+            PydanticAIIntegration(include_prompts=False),
+        ],
         # Pass classes, not strings — Sentry matches strings against the exact type
         # name, so a near-miss (e.g. "MaxRetriesExceeded") silently filters nothing.
         ignore_errors=[KeyboardInterrupt, SystemExit, MaxRetriesExceededError],

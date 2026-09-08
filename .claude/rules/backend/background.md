@@ -52,7 +52,7 @@ Don't dedup on the Celery `task_id` — retries reuse the same id.
 
 ## Database Session Lifecycle
 
-`run_service()` wraps the call in `async_db_session()`, which auto-commits on success and rolls back on exception. Background services therefore do **not** call `commit()` themselves.
+`run_service()` wraps the call in `session_scope()`, which auto-commits on success and rolls back on exception. Background services therefore do **not** call `commit()` themselves.
 
 ### Fork safety
 
@@ -94,9 +94,9 @@ Per-queue heartbeat tasks (`heartbeat_default`, `heartbeat_heavy`) are pure live
 
 ## Enqueueing from Application Code
 
-Use helpers in `app/workers/queue.py` — never call `task.delay()` / `task.apply_async()` directly from feature code. When adding a task, add a typed `enqueue_<task_name>` helper.
+Use helpers in `app/workers/enqueue.py` — never call `task.delay()` / `task.apply_async()` directly from feature code. When adding a task, add a typed `enqueue_<task_name>` helper.
 
-Feature services import queue helpers at the top of the file. To keep that cycle-free (`features → queue → registry`), `app/workers/registry.py` imports service classes lazily **inside** task bodies — the one sanctioned deferred-import location. Never import `app.features` at module level anywhere in `app/workers/`.
+Feature services import enqueue helpers at the top of the file. To keep that cycle-free (`features → enqueue → registry`), `app/workers/registry.py` imports service classes lazily **inside** task bodies — the one sanctioned deferred-import location. Never import `app.features` at module level anywhere in `app/workers/`.
 
 ## Anti-patterns
 
@@ -104,5 +104,5 @@ Feature services import queue helpers at the top of the file. To keep that cycle
 - `try/except: pass` in a task body — swallows real bugs; use `autoretry_for=(SpecificError,)` instead
 - Storing state on `self` with `bind=True` — tasks run on whatever worker picks them up, no continuity
 - Task A enqueues B and awaits B's result — restructure as one task or chain via signatures
-- Per-task DB pool tuning / custom session factory / manual transactions — stick to `run_service` + `async_db_session`
+- Per-task DB pool tuning / custom session factory / manual transactions — stick to `run_service` + `session_scope()`
 - Module-level network connections (boto3/redis/httpx client at import time) — breaks fork safety

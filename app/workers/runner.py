@@ -5,6 +5,8 @@ from typing import Any, TypeVar
 
 from celery.signals import worker_process_init, worker_process_shutdown
 
+from app.core.db import engine, session_scope
+
 T = TypeVar("T")
 
 _runner: asyncio.Runner | None = None
@@ -20,10 +22,10 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
 
 
 def run_service(service_cls: type, *args, **kwargs):
-    from app.core.db.async_ import async_db_session
-
+    # Opens a unit of work (commit on success / rollback on error), runs the
+    # service on the worker's persistent event loop and returns its result.
     async def _run():
-        async with async_db_session() as db:
+        async with session_scope() as db:
             return await service_cls(db).call(*args, **kwargs)
 
     return run_async(_run())
@@ -33,12 +35,9 @@ def run_service(service_cls: type, *args, **kwargs):
 def setup_async_runner(**kwargs):
     global _runner
     _runner = asyncio.Runner()
-
     # Forked children inherit the parent's connection pool with stale file
     # descriptors — dispose the Postgres engine after fork.
-    from app.core.db.async_ import async_engine
-
-    _runner.run(async_engine.dispose())
+    _runner.run(engine.dispose())
 
 
 @worker_process_shutdown.connect
@@ -46,8 +45,6 @@ def cleanup_async_runner(**kwargs):
     global _runner
     if _runner is None:
         return
-    from app.core.db.async_ import async_engine
-
-    _runner.run(async_engine.dispose())
+    _runner.run(engine.dispose())
     _runner.close()
     _runner = None

@@ -23,7 +23,7 @@ A minimal, lightweight FastAPI + Celery template following a feature-based archi
 - **Celery** (Redis broker) — workers + beat, with a persistent async runner
 - **pydantic-ai** + **AWS Bedrock** for AI agents
 - **structlog** + **Sentry**
-- Tooling: **uv**, **ruff**, **pytest** (+ factory-boy), **just**
+- Tooling: **uv**, **ruff**, **pyright**, **complexipy**, **pytest** (+ factory-boy), **just**
 
 ## Architecture
 
@@ -31,8 +31,8 @@ A minimal, lightweight FastAPI + Celery template following a feature-based archi
 api/ → features/*/routes/ → features/*/service/ → repositories/
 ```
 
-- `app/core/` — config, db, errors, logging, security, responses, pagination
-- `app/features/<domain>/` — `routes/`, `service/`, `schemas.py`
+- `app/core/` — config, db, errors, logging, security middleware, responses, pagination
+- `app/features/<domain>/` — `routes/`, `service/`, `schemas.py`, `agents/`
 - `app/repositories/<domain>/` — `models.py`, `crud.py`, `dependencies.py`
 - `app/workers/` — Celery app, queues, task registry, enqueue helpers
 - `app/core/agents.py` — shared pydantic-ai config (agents live in `features/*/agents/`)
@@ -43,7 +43,7 @@ Coding rules live in `.claude/rules/backend/`. The `items` feature is a complete
 
 ```bash
 cp .env.example .env          # adjust as needed
-uv sync                       # install deps (regenerates uv.lock on first run)
+uv sync                       # install deps
 
 # everything in Docker (api + workers + cron + postgres + redis):
 just compose
@@ -54,6 +54,19 @@ just migrate
 just app                      # API at http://localhost:8000 (docs at /docs)
 just workers                  # Celery workers
 ```
+
+## Quality gates
+
+`just ci` runs the same checks as the GitHub Actions workflow (`.github/workflows/ci.yml`):
+
+| Gate | Command | What it enforces |
+|---|---|---|
+| Format + lint | `just lint` | ruff (`ruff format --check`, `ruff check`) |
+| Types | `just types` | pyright (`standard` mode) |
+| Complexity | `just complexity` | complexipy — cognitive complexity ≤ 10 per function |
+| Tests | `just test` | pytest against a real PostgreSQL |
+
+The complexity limit is deliberately low: a function that trips it should be split into smaller steps, not annotated away.
 
 ## Testing
 
@@ -66,7 +79,7 @@ just test
 
 ```bash
 just app | workers | cron | compose
-just ruff | types | test | ci
+just ruff | lint | types | complexity | test | ci
 just migrate
 just makemigration "create X table"
 ```

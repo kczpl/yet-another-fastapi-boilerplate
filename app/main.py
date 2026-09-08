@@ -31,15 +31,10 @@ app = FastAPI(
 
 setup_exception_handlers(app)
 setup_security_middleware(app)
-
 app.include_router(api_v1_router)
-
-
-@app.get("/")
-async def root() -> dict:
-    return {"message": "hello"}
 
 
 @app.get("/up", include_in_schema=False)
 async def up() -> Response:
+    # Liveness probe — cheap on purpose (no DB round-trip); skipped by request logging.
     return Response(content="OK", media_type="text/plain")

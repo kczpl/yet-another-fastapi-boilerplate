@@ -71,7 +71,7 @@ Architecture layers:
 - Background task service classes (`features/<domain>/service/`) — same pattern as route-facing services
 - Async runner (`app/workers/runner.py`) — one persistent `asyncio.Runner` per worker process + `run_service()` which opens a DB session, instantiates the service, and calls it
 - Celery task functions (`app/workers/registry.py`) — thin wrappers that call `run_service(ServiceClass, *args, **kwargs)`
-- Queue functions (`app/workers/queue.py`) — public API to enqueue tasks from application code
+- Enqueue helpers (`app/workers/enqueue.py`) — public API to enqueue tasks from application code
 
 **Async runner lifecycle:** each Celery worker process (prefork) gets its own `asyncio.Runner` via the `worker_process_init` signal. The runner keeps one event loop alive across all tasks in that process, so the async DB pool is reused. On `worker_process_shutdown` it disposes the engine.
 
@@ -99,7 +99,7 @@ def summarize_item_task(item_id: str) -> dict:
     return run_service(SummarizeItemService, item_id)
 ```
 
-Background task services don't commit — `async_db_session` (inside `run_service`) commits on success and rolls back on exception. Route-facing services commit explicitly. See `background.md` for the full Celery handbook.
+Background task services don't commit — `session_scope()` (inside `run_service`) commits on success and rolls back on exception. Route-facing services commit explicitly. See `background.md` for the full Celery handbook.
 
 ## Shared Services (`app/services/`)
 

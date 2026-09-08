@@ -1,20 +1,21 @@
+import asyncio
 import os
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from alembic import context
-from app.core.db import Base  # imports app.repositories → registers all models
-from app.core.db.base import _to_psycopg_url
+import app.repositories  # noqa: F401  # registers every model on Base.metadata
+from app.core.db import Base, to_psycopg_url
 
 config = context.config
 
 # Override the URL from the environment (normalized onto async psycopg) when set.
 database_url = os.environ.get("DATABASE_URL")
 if database_url:
-    config.set_main_option("sqlalchemy.url", _to_psycopg_url(database_url))
+    config.set_main_option("sqlalchemy.url", to_psycopg_url(database_url))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -57,13 +58,7 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    import asyncio
-
-    asyncio.run(run_async_migrations())
-
-
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    asyncio.run(run_async_migrations())

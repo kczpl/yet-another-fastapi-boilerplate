@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, String, Text
+from sqlalchemy import CheckConstraint, DateTime, String, Text, column
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,7 +18,8 @@ VALID_ITEM_STATUSES = ("active", "archived")
 class Item(Base):
     __tablename__ = "items"
     __table_args__ = (
-        CheckConstraint("status IN ('active', 'archived')", name="status"),
+        # Short constraint name — the naming convention expands it to "items_status_check".
+        CheckConstraint(column("status").in_(VALID_ITEM_STATUSES), name="status"),
         {"schema": "public"},
     )
 

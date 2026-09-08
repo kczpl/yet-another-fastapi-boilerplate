@@ -7,6 +7,7 @@ Minimal FastAPI + Celery boilerplate. Feature-based architecture, async SQLAlche
 - Package manager: `uv` · virtualenv `.venv` · run tooling with `uv run ...`
 - Framework: FastAPI (async/await) · DB: PostgreSQL + SQLAlchemy 2.0 + psycopg3
 - Background: Celery (Redis broker) · AI: pydantic-ai + Bedrock
+- Quality gates (`just ci`, also GitHub Actions): ruff, pyright, complexipy (cognitive complexity ≤ 10), pytest
 
 ## Rules
 
@@ -14,7 +15,7 @@ Detailed coding rules live in `.claude/rules/backend/` and auto-load when editin
 
 | File | Covers |
 |---|---|
-| `core.md` | Python style, errors, middleware, `APIResponse`, logging, core modules |
+| `core.md` | Python style, complexity limit, errors, middleware, `APIResponse`, logging, core modules |
 | `routes.md` | API layer, dependencies-as-validation, pagination, response handling |
 | `services.md` | Service classes (`call()` orchestrator), background task services |
 | `database.md` | Models, conventions, UUIDv7, migrations, transaction ownership |
@@ -30,12 +31,12 @@ Request flow: `api/ → features/*/routes/ → features/*/service/ → repositor
 ```
 app/
 ├── api/              # Router aggregation under /api/v1
-├── core/             # config, db/, errors, exceptions, logger, security, responses, pagination, agents
+├── core/             # config, db, errors, exceptions, logger, security, responses, pagination, agents
 ├── features/         # Domain verticals: <domain>/{routes/, service/, schemas.py, agents/}
 ├── repositories/     # Data layer: <domain>/{models.py, crud.py, dependencies.py}
 ├── services/         # Shared Service base class
 ├── integrations/     # External services (sentry/, ...)
-├── workers/          # Celery: celery.py, runner.py, registry.py, queue.py, queues.py
+├── workers/          # Celery: celery.py, runner.py, registry.py, enqueue.py, queues.py
 └── utils/            # Pure helpers (uuid, time)
 ```
 
@@ -55,8 +56,11 @@ Common commands (see `justfile`):
 just app        # run API with reload (host)
 just workers    # run Celery workers
 just cron       # run Celery beat
-just ruff       # format + lint
+just ruff       # format + lint (fixes in place)
+just lint       # format --check + lint (CI)
 just types      # pyright
+just complexity # complexipy — cognitive complexity gate
+just ci         # lint + types + complexity + test
 just migrate    # alembic upgrade head
 just makemigration "create X table"
 ```
@@ -70,10 +74,10 @@ docker compose up postgres-test -d
 uv run pytest          # or: just test
 ```
 
-Mock third-party services (LLMs, external APIs) and Celery (`mock_celery` fixture). Test layout mirrors `app/`.
+Mock third-party services (LLMs, external APIs). Celery is mocked for every test (autouse `mock_celery`). Test layout mirrors `app/`.
 
 ## Database
 
 - PostgreSQL 18 (native `uuidv7()`). UUIDv7 primary keys via `app/utils/uuid.py`.
-- No PostgreSQL ENUMs — use `String(n)` + `CheckConstraint`. Conventions in `app/core/db/base.py`.
+- No PostgreSQL ENUMs — use `String(n)` + `CheckConstraint`. Conventions in `app/core/db.py`.
 - Always add a migration (`just makemigration`); never run migrations against production yourself.

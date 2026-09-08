@@ -7,7 +7,7 @@ from app.features.items.service.create import CreateItemService
 from app.features.items.service.helpers import serialize_item
 from app.features.items.service.list import ListItemsService
 from app.repositories.items.dependencies import ValidItem
-from app.workers.queue import enqueue_summarize_item
+from app.workers.enqueue import enqueue_summarize_item
 
 # No prefix on the router — use full paths in every decorator (keeps REST paths
 # explicit and greppable). Aggregated under /api/v1 in app/api/__init__.py.

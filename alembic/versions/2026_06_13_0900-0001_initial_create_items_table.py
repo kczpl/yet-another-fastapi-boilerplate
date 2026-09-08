@@ -7,9 +7,8 @@ Create Date: 2026-06-13
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
-
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision = "0001_initial"
 down_revision = None
@@ -29,7 +28,7 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        # SHORT name — the naming convention in app/core/db/base.py expands it to
+        # SHORT name — the naming convention in app/core/db.py expands it to
         # "items_status_check".
         sa.CheckConstraint("status IN ('active', 'archived')", name="status"),
         schema="public",

@@ -22,6 +22,7 @@ services:
       context: .
       dockerfile: Dockerfile
     entrypoint: []
+    # watchfiles ships with uvicorn[standard] — reloads the worker on code changes.
     command: /app/.venv/bin/watchfiles --filter python "/app/.venv/bin/celery -A app.workers.celery:celery worker --loglevel=info -Q default,heavy" ./app
     volumes:
       - ./app:/app/app
