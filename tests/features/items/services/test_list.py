@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.items.service.list import ListItemsService
+from app.features.items.services.list import ListItemsService
 from tests.factories.item import ItemFactory
 
 
@@ -21,3 +21,12 @@ class TestListItemsService:
         assert result["total_count"] == 0
         assert result["total_pages"] == 0
         assert result["items"] == []
+
+    async def test_page_past_end_keeps_total_count(self, db_session: AsyncSession):
+        await ItemFactory.create()
+
+        result = await ListItemsService(db=db_session).call(page=2, page_size=10)
+
+        assert result["items"] == []
+        assert result["total_count"] == 1
+        assert result["total_pages"] == 1

@@ -1,11 +1,12 @@
 import sys
+from typing import Any
 
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import setup_logging as celery_setup_logging
 from celery.signals import task_prerun
 
-from app.core.config import celery_config, database_config
+from app.core.config import celery_config
 from app.core.logger import bind_context, clear_context, setup_logging
 from app.integrations.sentry.client import init_sentry
 
@@ -21,26 +22,16 @@ init_sentry()
 
 # Clears structlog contextvars between tasks on the same worker and binds task metadata.
 @task_prerun.connect
-def _bind_task_context(task_id=None, task=None, **_):
+def _bind_task_context(task_id: str | None = None, task: Any = None, **_):
     clear_context()
-    task_name = getattr(task, "name", None) if task is not None else None
-    delivery_info = getattr(getattr(task, "request", None), "delivery_info", None) or {}
-    queue = delivery_info.get("routing_key") or "unknown"
-
-    ctx: dict[str, str] = {}
-    if task_id:
-        ctx["task_id"] = task_id
-    if task_name:
-        ctx["task_name"] = task_name
-    if queue and queue != "unknown":
-        ctx["queue"] = queue
-    if ctx:
-        bind_context(**ctx)
+    delivery_info = getattr(task.request, "delivery_info", None) or {}
+    context = {"task_id": task_id, "task_name": task.name, "queue": delivery_info.get("routing_key")}
+    bind_context(**{key: value for key, value in context.items() if value})
 
 
 celery = Celery(
     "app",
-    broker=database_config.REDIS_URL,
+    broker=celery_config.REDIS_URL,
     task_cls="app.workers.base:BaseTask",
 )
 

@@ -1,8 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.items.service.create import CreateItemService
-from app.repositories.items.models import Item
+from app.features.items.models import Item
+from app.features.items.services.create import CreateItemService
 
 
 class TestCreateItemService:
@@ -11,8 +11,8 @@ class TestCreateItemService:
 
         result = await service.call(name="Widget", description="A useful widget")
 
-        assert result["name"] == "Widget"
-        assert result["status"] == "active"
+        assert result.name == "Widget"
+        assert result.status == "active"
 
         item = (await db_session.execute(select(Item).where(Item.name == "Widget"))).scalar_one()
         assert item.description == "A useful widget"
@@ -23,4 +23,4 @@ class TestCreateItemService:
 
         result = await service.call(name="Bare")
 
-        assert result["description"] is None
+        assert result.description is None

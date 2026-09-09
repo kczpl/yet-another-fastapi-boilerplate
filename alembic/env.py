@@ -1,20 +1,19 @@
-import os
+import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy import pool, text
+from alembic import context
+from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from alembic import context
-from app.core.db import Base  # imports app.repositories → registers all models
-from app.core.db.base import _to_psycopg_url
+import app.models  # noqa: F401  # registers every model on Base.metadata
+from app.core.config import database_config
+from app.core.db import Base, to_psycopg_url
 
 config = context.config
 
-# Override the URL from the environment (normalized onto async psycopg) when set.
-database_url = os.environ.get("DATABASE_URL")
-if database_url:
-    config.set_main_option("sqlalchemy.url", _to_psycopg_url(database_url))
+# Use the same env / .env settings as the app; ConfigParser needs escaped percent signs.
+config.set_main_option("sqlalchemy.url", to_psycopg_url(database_config.DATABASE_URL).replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -23,12 +22,11 @@ target_metadata = Base.metadata
 
 
 def run_migrations_for_schema(connection: Connection) -> None:
-    connection.execute(text("SET search_path TO public"))
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
-        version_table_schema="public",
         include_schemas=True,
+        compare_server_default=True,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -42,7 +40,6 @@ async def run_async_migrations() -> None:
     )
     async with connectable.connect() as connection:
         await connection.run_sync(run_migrations_for_schema)
-        await connection.commit()
     await connectable.dispose()
 
 
@@ -57,13 +54,7 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    import asyncio
-
-    asyncio.run(run_async_migrations())
-
-
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    asyncio.run(run_async_migrations())
