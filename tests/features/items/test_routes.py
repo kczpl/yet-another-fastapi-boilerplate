@@ -1,3 +1,6 @@
+from importlib.util import find_spec
+
+import pytest
 from httpx import AsyncClient
 
 from tests.factories.item import ItemFactory
@@ -52,6 +55,7 @@ class TestItemRoutes:
         assert resp.status_code == 404
         assert resp.json()["error"] == "api.items.item_not_found"
 
+    @pytest.mark.skipif(find_spec("pydantic_ai") is None, reason="requires the ai extra")
     async def test_summarize_enqueues_task(self, client: AsyncClient, mock_celery):
         item = await ItemFactory.create()
 
@@ -59,3 +63,18 @@ class TestItemRoutes:
 
         assert resp.status_code == 202
         mock_celery.assert_called_once_with((str(item.id),), {})
+
+    @pytest.mark.parametrize("name", [" ", "\t\n"])
+    async def test_whitespace_name_is_rejected(self, client: AsyncClient, name: str):
+        response = await client.post("/api/v1/items", json={"name": name})
+        assert response.status_code == 422
+
+    async def test_item_name_is_trimmed(self, client: AsyncClient):
+        response = await client.post("/api/v1/items", json={"name": "  Widget  "})
+        assert response.json()["data"]["name"] == "Widget"
+
+    async def test_out_of_range_page_preserves_metadata(self, client: AsyncClient):
+        await ItemFactory.create()
+        response = await client.get("/api/v1/items", params={"page": 10})
+        assert response.status_code == 200
+        assert response.json()["data"] == {"items": [], "page": 10, "page_size": 10, "total_count": 1, "total_pages": 1}

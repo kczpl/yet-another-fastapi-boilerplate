@@ -1,34 +1,37 @@
 [project]
 name = "app"
 version = "0.0.1"
-description = "Minimal FastAPI + Celery boilerplate"
+description = "Feature-based FastAPI boilerplate with optional workers and AI"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     # core
     "fastapi>=0.125.0",
     "uvicorn[standard]>=0.38.0",
+    "pydantic>=2.12.0",
     "pydantic-settings>=2.12.0",
-    "httpx>=0.28.1",
     # db
     "sqlalchemy[asyncio]>=2.0.45",
     "psycopg[binary]>=3.3.2",
     "alembic>=1.17.2",
-    "uuid-utils>=0.10",
-    # worker
-    "celery[redis]>=5.6.0",
-    # ai (pydantic-ai + AWS Bedrock)
-    "pydantic-ai-slim[bedrock]>=1.35.0",
-    "genai-prices>=0.0.66",
     # observability
     "sentry-sdk>=2.48.0",
     "structlog>=25.5.0",
+]
+
+[project.optional-dependencies]
+workers = ["celery[redis]>=5.6.0"]
+ai = [
+    "celery[redis]>=5.6.0",
+    "pydantic-ai-slim[bedrock]>=1.35.0",
+    "genai-prices>=0.0.66",
 ]
 
 [dependency-groups]
 dev = [
     "complexipy>=8.0.1",
     "factory-boy>=3.3.3",
+    "httpx>=0.28.1",
     "pyright>=1.1.408",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.1.0",
@@ -59,7 +62,7 @@ paths = ["app", "tests", "alembic"]
 max-complexity-allowed = 10
 
 [tool.pyright]
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
@@ -68,6 +71,7 @@ exclude = ["**/node_modules", "**/__pycache__", "**/.*", "alembic/versions"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",

@@ -7,7 +7,7 @@ from pydantic_ai.models.bedrock import BedrockConverseModel, BedrockModelSetting
 from pydantic_ai.providers.bedrock import BedrockProvider
 from pydantic_ai.usage import RunUsage
 
-from app.core.config import ai_config, aws_config
+from app.core.config import ai_config
 from app.core.logger import log
 
 # General pydantic-ai / Bedrock configuration shared by every agent. Individual
@@ -21,8 +21,6 @@ def _get_bedrock_provider() -> BedrockProvider:
     # first use, after the worker has forked) — never construct one at import time.
     return BedrockProvider(
         region_name=ai_config.BEDROCK_REGION,
-        aws_access_key_id=aws_config.AWS_ACCESS_KEY,
-        aws_secret_access_key=aws_config.AWS_SECRET_KEY,
     )
 
 

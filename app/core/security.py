@@ -4,6 +4,7 @@ import uuid
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.datastructures import Headers, MutableHeaders
+from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -12,9 +13,6 @@ from app.core.errors import ERRORS
 from app.core.logger import bind_context, clear_context, log
 
 MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10MB
-MAX_UPLOAD_REQUEST_SIZE = 200 * 1024 * 1024  # 200MB (upload endpoints)
-# Substring match — add upload route prefixes here that should allow large bodies.
-LARGE_BODY_PATHS: tuple[str, ...] = ()
 HEALTHCHECK_PATH = "/up"  # liveness probe — skip logging
 
 # Browser-facing hardening headers. Rate limiting, IP filtering and WAF rules
@@ -34,9 +32,7 @@ def _response_headers(message: Message) -> MutableHeaders:
 
 
 def _client_ip(scope: Scope) -> str:
-    forwarded_for = Headers(scope=scope).get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+    # Uvicorn resolves forwarded headers only for explicitly trusted proxies.
     client = scope.get("client")
     return client[0] if client else "unknown"
 
@@ -62,7 +58,7 @@ class LoggingMiddleware:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
-                _response_headers(message).append("X-Request-ID", request_id)
+                _response_headers(message)["X-Request-ID"] = request_id
             await send(message)
 
         try:
@@ -77,25 +73,44 @@ class LoggingMiddleware:
                 duration=f"{duration:.3f}s",
                 client_ip=_client_ip(scope),
             )
+            clear_context()
 
 
 class RequestSizeLimitMiddleware:
-    # Rejects oversized bodies from the Content-Length header before reading them.
+    # Check Content-Length early, then count actual bytes (including chunked input).
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http" and self._too_large(scope):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        try:
+            content_length = int(Headers(scope=scope).get("content-length") or 0)
+            if content_length < 0:
+                raise ValueError("negative content length")
+        except ValueError:
+            response = JSONResponse(status_code=400, content={"error": ERRORS["bad_request"], "data": {}})
+            await response(scope, receive, send)
+            return
+
+        if content_length > MAX_REQUEST_SIZE:
             response = JSONResponse(status_code=413, content={"error": ERRORS["file_too_large"], "data": {}})
             await response(scope, receive, send)
             return
-        await self.app(scope, receive, send)
 
-    @staticmethod
-    def _too_large(scope: Scope) -> bool:
-        content_length = int(Headers(scope=scope).get("content-length") or 0)
-        is_upload = any(path in scope["path"] for path in LARGE_BODY_PATHS)
-        return content_length > (MAX_UPLOAD_REQUEST_SIZE if is_upload else MAX_REQUEST_SIZE)
+        bytes_read = 0
+
+        async def limited_receive() -> Message:
+            nonlocal bytes_read
+            message = await receive()
+            bytes_read += len(message.get("body", b""))
+            if bytes_read > MAX_REQUEST_SIZE:
+                raise HTTPException(status_code=413, detail="Request body too large")
+            return message
+
+        await self.app(scope, limited_receive, send)
 
 
 class SecurityHeadersMiddleware:
@@ -115,14 +130,12 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_wrapper)
 
 
-def setup_security_middleware(app: FastAPI) -> None:
-    # Added last → outermost. Execution order (outer → inner):
-    # CORS → SecurityHeaders → Logging → RequestSizeLimit.
+def setup_security_middleware(app: FastAPI) -> ASGIApp:
+    # Body errors are handled inside FastAPI. Response wrappers surround the
+    # entire app so even ServerErrorMiddleware's 500 response gets their headers.
     app.add_middleware(RequestSizeLimitMiddleware)
-    app.add_middleware(LoggingMiddleware)
-    app.add_middleware(SecurityHeadersMiddleware)
-    app.add_middleware(
-        CORSMiddleware,
+    return CORSMiddleware(
+        SecurityHeadersMiddleware(LoggingMiddleware(app)),
         allow_origins=api_config.CORS_ORIGINS,
         allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         allow_headers=["*"],

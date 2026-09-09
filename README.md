@@ -1,85 +1,153 @@
 # Yet another FastAPI boilerplate
 
-<p align="center">
-  <em>Minimal, production-ready FastAPI + Celery template — feature-based architecture, async all the way down.</em>
-</p>
-
-<p align="center">
-  <img alt="Python" src="https://img.shields.io/badge/python-3.13+-3776AB?logo=python&logoColor=white">
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white">
-  <img alt="SQLAlchemy" src="https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?logo=sqlalchemy&logoColor=white">
-  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white">
-  <img alt="Celery" src="https://img.shields.io/badge/Celery-5.6-37814A?logo=celery&logoColor=white">
-  <img alt="pydantic-ai" src="https://img.shields.io/badge/pydantic--ai-Bedrock-E92063?logo=amazonaws&logoColor=white">
-  <img alt="uv" src="https://img.shields.io/badge/uv-managed-DE5FE9?logo=uv&logoColor=white">
-</p>
-
-A minimal, lightweight FastAPI + Celery template following a feature-based architecture.
-
-## Stack
-
-- **FastAPI** (async) + **Pydantic v2**
-- **PostgreSQL 18** + **SQLAlchemy 2.0** (async, psycopg3) + **Alembic**
-- **Celery** (Redis broker) — workers + beat, with a persistent async runner
-- **pydantic-ai** + **AWS Bedrock** for AI agents
-- **structlog** + **Sentry**
-- Tooling: **uv**, **ruff**, **pyright**, **complexipy**, **pytest** (+ factory-boy), **just**
+A small feature-based FastAPI template for **Python 3.14** and **PostgreSQL 18**.
+Celery/Redis and Pydantic AI/Bedrock are optional examples.
 
 ## Architecture
 
-```
-api/ → features/*/routes/ → features/*/service/ → repositories/
+```text
+app/
+├── main.py                  # FastAPI instance `api`, wrapped ASGI entry point `app`
+├── api/__init__.py          # Explicit router registration under /api/v1
+├── models.py                # Explicit model registry for Alembic
+├── core/                    # Settings, database, errors, logging, middleware
+├── features/items/
+│   ├── routes.py            # HTTP contracts and response envelopes
+│   ├── dependencies.py      # Load/validate route resources
+│   ├── schemas.py           # Pydantic request/response models
+│   ├── models.py            # SQLAlchemy entities
+│   ├── repository.py        # Queries and persistence; flush, never commit
+│   ├── services/            # Use cases: create, list, cleanup, summarize
+│   ├── ai_routes.py         # Enabled by installing the ai extra
+│   └── agents/              # Optional AI wrapper
+├── services/base.py         # Shared AsyncSession constructor
+├── workers/                 # Optional Celery infrastructure and task registry
+├── integrations/sentry/     # Optional DSN; no telemetry in development
+└── utils/time.py
 ```
 
-- `app/core/` — config, db, errors, logging, security middleware, responses, pagination
-- `app/features/<domain>/` — `routes/`, `service/`, `schemas.py`, `agents/`
-- `app/repositories/<domain>/` — `models.py`, `crud.py`, `dependencies.py`
-- `app/workers/` — Celery app, queues, task registry, enqueue helpers
-- `app/core/agents.py` — shared pydantic-ai config (agents live in `features/*/agents/`)
+Request flow: **routes → services → repository**. Resource dependencies can load
+an entity directly from the repository and return a 404 before calling a service.
+Services accept `AsyncSession` and return entities or typed data. Routes own the
+API envelope, and Pydantic validates/serializes at the HTTP boundary.
 
-Coding rules live in `.claude/rules/backend/`. The `items` feature is a complete example slice — copy it, then delete it.
+Repositories only flush. A route-facing use case commits explicitly; worker use
+cases commit through `session_scope()`. Compose several writes inside one service
+before committing. Don't call a committing service from another transaction owner.
+No generic repository, abstract service hierarchy, or mandatory helper per step.
+
+Copy `features/items/` to start a feature, then register its router in `app/api/`
+and model in `app/models.py`. Add a migration and tests alongside the feature.
+Shared infrastructure should not grow until there is a concrete second use case.
 
 ## Quickstart
 
+Install [uv](https://docs.astral.sh/uv/) and [just](https://just.systems/).
+
 ```bash
-cp .env.example .env          # adjust as needed
-uv sync                       # install deps
+cp .env.example .env
+uv sync --locked                    # core + development tools; Python from .python-version
+just compose                        # API + one migration job + PostgreSQL
+```
 
-# everything in Docker (api + workers + cron + postgres + redis):
-just compose
+API: http://localhost:8000 · docs: `/docs` · liveness: `/up`.
+The `postgres-test` service only starts when explicitly requested. Redis, workers
+and beat use the `workers` Compose profile. API startup waits for migrations;
+worker startup waits for both migrations and Redis.
 
-# or run pieces on the host:
-docker compose up postgres redis -d
+To run the API on the host:
+
+```bash
+docker compose up postgres -d --wait
 just migrate
-just app                      # API at http://localhost:8000 (docs at /docs)
-just workers                  # Celery workers
+just app
 ```
 
-## Quality gates
+`.env.example` uses localhost. Compose overrides database/broker hosts for
+containers, so switching between host and Docker requires no edits. If you change
+host port mappings, update the corresponding URLs in `.env` as well.
 
-`just ci` runs the same checks as the GitHub Actions workflow (`.github/workflows/ci.yml`):
+## Optional workers and AI
 
-| Gate | Command | What it enforces |
-|---|---|---|
-| Format + lint | `just lint` | ruff (`ruff format --check`, `ruff check`) |
-| Types | `just types` | pyright (`standard` mode) |
-| Complexity | `just complexity` | complexipy — cognitive complexity ≤ 10 per function |
-| Tests | `just test` | pytest against a real PostgreSQL |
+| Installation | Includes |
+|---|---|
+| `uv sync --locked` | CRUD API, PostgreSQL, development tools |
+| `uv sync --locked --extra workers` | Core + Celery/Redis worker and cron examples |
+| `uv sync --locked --extra ai` | Workers + Pydantic AI/Bedrock and `/items/{id}/summarize` |
 
-The complexity limit is deliberately low: a function that trips it should be split into smaller steps, not annotated away.
+`just` recipes use the installed environment (`uv run --no-sync`), so select an
+extra with `uv sync` first. `uv sync --locked` restores the core-only environment.
+Type-checking every source module requires `uv sync --locked --all-extras`.
 
-## Testing
-
-```bash
-docker compose up postgres-test -d
-just test
-```
-
-## Common commands
+Host workers:
 
 ```bash
-just app | workers | cron | compose
-just ruff | lint | types | complexity | test | ci
+uv sync --locked --extra workers     # or --extra ai
+docker compose up postgres redis -d --wait
 just migrate
-just makemigration "create X table"
+just workers                        # another terminal: just cron
 ```
+
+Docker workers:
+
+```bash
+docker compose --profile workers up --build
+# API + workers with the AI example:
+APP_EXTRA=ai docker compose --profile workers up --build
+```
+
+AWS credentials use the standard SDK chain: exported `AWS_PROFILE`, standard AWS
+credential variables (including session tokens), or an IAM role. For Docker, pass
+credentials/profile access explicitly using your deployment's mechanism. Model
+clients are created on first use, after worker fork; API import needs no AWS
+credentials. Configure `BEDROCK_MODEL` for an inference profile enabled in your
+account. Tests never call a live model.
+
+## Quality and tests
+
+```bash
+uv sync --locked --all-extras
+just lint                           # non-mutating Ruff format/lint checks
+just ruff                           # format and autofix
+just types                          # Pyright
+just complexity                     # complexipy: cognitive complexity <= 10/function
+just test                           # waits for PostgreSQL 18, applies migrations, tests
+just ci                             # all local checks
+just makemigration "create widgets table"
+```
+
+CI checks **core, workers and AI installations** on Python 3.14. It runs lint,
+complexity, tests, a migration upgrade/check/downgrade/upgrade cycle, and builds
+and imports runtime images without development dependencies. Pyright checks all
+modules in the AI variant.
+
+Tests use migrated PostgreSQL schemas and rolled-back outer transactions with
+session savepoints. Tests and async fixtures share one event loop. Factories
+supply test data; external model calls and Celery publishing are mocked.
+
+Complexity is a guardrail, not a readability score: prefer early returns and
+clear names, and extract helpers only when they clarify meaningful steps.
+
+## Deployment boundaries
+
+The Docker image runs as a non-root user and does not run migrations in its
+entrypoint. Compose supplies a separate migration job. In another deployment,
+run the same migration command once before starting replicas.
+
+The example CRUD routes are public. Add authentication for your product, with
+HTTP identity/access checks in dependencies and business invariants in services.
+CORS defaults to no origins; list deployed frontend origins explicitly.
+Docs and OpenAPI default to disabled outside development (`SHOW_DOCS` overrides).
+
+The app limits consumed request bodies to 10 MiB, including chunked requests.
+Set ingress body/time limits and rate limiting at your reverse proxy. Uvicorn
+should only trust forwarded headers from known proxy addresses. `/up` checks
+process liveness; it deliberately does not assert database or broker readiness.
+
+The AI example skips completed summaries on sequential redelivery. It does not
+promise exactly-once model calls under concurrent tasks or a crash between a model
+response and commit. Add locking/idempotency or a transactional outbox when a real
+workflow needs those guarantees.
+
+Detailed review and implementation decisions: [docs/review.md](docs/review.md).
+Coding guidance: [CLAUDE.md](CLAUDE.md) and `.claude/rules/backend/`.

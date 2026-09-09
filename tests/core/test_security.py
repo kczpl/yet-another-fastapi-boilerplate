@@ -1,5 +1,7 @@
+import pytest
 from httpx import AsyncClient
 
+from app.core import security
 from app.core.security import MAX_REQUEST_SIZE
 
 
@@ -28,3 +30,25 @@ class TestMiddleware:
 
         assert resp.status_code == 413
         assert resp.json()["error"] == "api.general.file_too_large"
+
+    @pytest.mark.parametrize("length", ["invalid", "-1"])
+    async def test_invalid_content_length_is_400(self, client: AsyncClient, length: str):
+        response = await client.post("/api/v1/items", content=b"{}", headers={"Content-Length": length})
+        assert response.status_code == 400
+
+    async def test_chunked_body_cannot_bypass_limit(self, client: AsyncClient, monkeypatch):
+        monkeypatch.setattr(security, "MAX_REQUEST_SIZE", 16)
+
+        async def chunks():
+            yield b'{"name":'
+            yield b'"too much data"}'
+
+        response = await client.post("/api/v1/items", content=chunks(), headers={"Content-Type": "application/json"})
+        assert response.status_code == 413
+        assert response.json()["error"] == "api.general.file_too_large"
+
+    async def test_body_at_limit_is_accepted(self, client: AsyncClient, monkeypatch):
+        body = b'{"name":"ok"}'
+        monkeypatch.setattr(security, "MAX_REQUEST_SIZE", len(body))
+        response = await client.post("/api/v1/items", content=body, headers={"Content-Type": "application/json"})
+        assert response.status_code == 201

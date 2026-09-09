@@ -1,13 +1,12 @@
 import logging
 import re
 from collections.abc import Iterator
+from importlib.util import find_spec
 
 import sentry_sdk
-from celery.exceptions import MaxRetriesExceededError
-from sentry_sdk.integrations.celery import CeleryIntegration
+from sentry_sdk.integrations import Integration
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
-from sentry_sdk.integrations.pydantic_ai import PydanticAIIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
@@ -80,15 +79,23 @@ def init_sentry() -> None:
             StarletteIntegration(transaction_style="endpoint", failed_request_status_codes=_SERVER_ERRORS),
             FastApiIntegration(transaction_style="endpoint", failed_request_status_codes=_SERVER_ERRORS),
             SqlalchemyIntegration(),
-            CeleryIntegration(monitor_beat_tasks=True, propagate_traces=True),
             # Real exceptions are captured by the framework integrations from the raised
             # exception (better grouping than synthesizing an issue from a log line).
             LoggingIntegration(level=logging.INFO, event_level=None),
-            # include_prompts also needs send_default_pii=True to record prompt/response
-            # text (sends model I/O to Sentry). Keep it off unless you need that.
-            PydanticAIIntegration(include_prompts=False),
+            *_optional_integrations(),
         ],
-        # Pass classes, not strings — Sentry matches strings against the exact type
-        # name, so a near-miss (e.g. "MaxRetriesExceeded") silently filters nothing.
-        ignore_errors=[KeyboardInterrupt, SystemExit, MaxRetriesExceededError],
+        ignore_errors=[KeyboardInterrupt, SystemExit],
     )
+
+
+def _optional_integrations() -> list[Integration]:
+    integrations = []
+    if find_spec("celery") is not None:
+        from sentry_sdk.integrations.celery import CeleryIntegration
+
+        integrations.append(CeleryIntegration(monitor_beat_tasks=True, propagate_traces=True))
+    if find_spec("pydantic_ai") is not None:
+        from sentry_sdk.integrations.pydantic_ai import PydanticAIIntegration
+
+        integrations.append(PydanticAIIntegration(include_prompts=False))
+    return integrations

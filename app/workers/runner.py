@@ -14,6 +14,7 @@ _runner: asyncio.Runner | None = None
 
 def run_async(coro: Coroutine[Any, Any, T]) -> T:
     if _runner is None:
+        coro.close()
         raise RuntimeError("async runner not initialized — is this running inside a Celery worker?")
     # Runner snapshots contextvars at its first run() (worker init, before any task) —
     # copy the current context per call so structlog bindings made in the task body
@@ -37,7 +38,7 @@ def setup_async_runner(**kwargs):
     _runner = asyncio.Runner()
     # Forked children inherit the parent's connection pool with stale file
     # descriptors — dispose the Postgres engine after fork.
-    _runner.run(engine.dispose())
+    _runner.run(engine.dispose(close=False))
 
 
 @worker_process_shutdown.connect

@@ -1,38 +1,23 @@
 ---
 paths:
   - "app/integrations/**/*.py"
-  - "app/features/**/service/**/*.py"
+  - "app/features/**/services/**/*.py"
   - "app/workers/**/*.py"
 ---
 
 # Integrations
 
-External services live in `app/integrations/<service>/`. Keep each integration behind a thin client/function module so feature code depends on your wrapper, not the vendor SDK.
+Keep vendor interactions behind small functions/clients in `integrations/<vendor>/` or in a
+feature's agent wrapper. Prefer async I/O; run sync SDK operations in a thread when called from
+async code. Build network clients lazily after fork. Do not add an unused generic client base.
 
-## General Principles
+Sentry initializes only with a DSN in staging/production. FastAPI/Starlette capture server
+exceptions; SQLAlchemy adds spans. Celery/Pydantic AI integrations are added only when installed.
+Worker cron monitors are enabled; prompt capture and local variables remain disabled.
 
-- **Config-driven** — read endpoints, regions, keys from `app/core/config.py` (domain-split `BaseSettings`). Never hardcode URLs, ARNs, regions, or secrets.
-- **Async I/O** — prefer `httpx.AsyncClient` over `requests`. For a sync-only SDK, wrap calls in `asyncio.to_thread(...)` and expose an `_async` helper.
-- **Fork safety** — never create network clients (boto3, httpx, redis) at module import time. Workers fork after import and children inherit broken sockets. Use an `@lru_cache` factory or instantiate at the call site (the cache is built lazily, after fork).
-- **Don't bend code to an integration** — tracking/telemetry is fire-and-forget; never branch business logic on whether an event was sent.
+The event scrubber is keyword-based and best-effort, not permission to log sensitive data.
+Don't log secrets, raw bodies or prompts. SDK initialization imports must not make optional
+packages mandatory for core API startup.
 
-```python
-@lru_cache(maxsize=1)
-def get_some_client() -> SomeClient:
-    return SomeClient(api_key=integrations_config.SOME_API_KEY)
-```
-
-## Sentry
-
-Error tracking + tracing. Init at module load — `app/main.py` (API) and `app/workers/celery.py` (workers + beat). 5xx errors are auto-captured by the Starlette / FastAPI / Celery integrations. Only initialized in `staging`/`production` with a `SENTRY_DSN` set.
-
-- PII scrubbing in `_scrub_event` (`app/integrations/sentry/client.py`) is keyword-based and best-effort. Don't log secrets, tokens, or raw request bodies via structlog — oddly-named fields slip through.
-- `send_default_pii=False` and `include_local_variables=False` by default. The pydantic-ai integration is always on; enabling prompt capture (`include_prompts=True` + `send_default_pii=True`) sends model I/O to Sentry — opt in deliberately.
-- `CeleryIntegration(monitor_beat_tasks=True)` turns each beat entry into a Sentry Cron monitor.
-
-## AWS Bedrock (AI)
-
-The AI agents use AWS Bedrock via pydantic-ai (see `ai-agents.md`).
-
-- Credentials come from `AWSConfig` (`AWS_ACCESS_KEY` / `AWS_SECRET_KEY` / region) or the default boto3 chain — read them in the cached `BedrockProvider` factory in `app/core/agents.py`, never hardcode.
-- The provider is built behind `@lru_cache` so it's created once per process, after fork.
+Bedrock uses the standard AWS credential chain including session tokens and profiles. Don't
+invent custom AWS credential names in application settings. See ai-agents.md for lifecycle.

@@ -1,21 +1,25 @@
 import os
 from collections.abc import AsyncGenerator, Iterator
+from importlib.util import find_spec
 from unittest.mock import patch
 
 # Must be set before importing app.core.config (engine is built at import time).
 os.environ["DATABASE_URL"] = (
     f"postgresql+psycopg://app_test:app_test@localhost:{os.environ.get('POSTGRES_TEST_PORT', '5433')}/app_test"
 )
+os.environ["ENVIRONMENT"] = "development"
+os.environ["SENTRY_DSN"] = ""
+os.environ["CORS_ORIGINS"] = '["http://localhost:3000"]'
 
 import pytest
 import pytest_asyncio
-from celery.app.task import Task
+from alembic import command
+from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
-import app.repositories  # registers every model on Base.metadata
-from app.core.db import Base, get_db
-from app.main import app
+from app.core.db import get_db
+from app.main import api, app
 from tests.factories.base import BaseFactory
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
@@ -29,16 +33,18 @@ def _factory_classes(cls: type[BaseFactory] = BaseFactory) -> Iterator[type[Base
         yield from _factory_classes(subclass)
 
 
+@pytest.fixture(scope="session")
+def migrated_db():
+    command.upgrade(Config("alembic/alembic.ini"), "head")
+
+
 @pytest_asyncio.fixture(scope="session")
-async def engine() -> AsyncGenerator[AsyncEngine]:
+async def engine(migrated_db) -> AsyncGenerator[AsyncEngine]:
     engine = create_async_engine(TEST_DATABASE_URL)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture
@@ -74,6 +80,12 @@ def mock_celery():
     # No test ever reaches the broker: .delay() / .apply_async() on every task is a
     # mock. Celery calls it as apply_async(args, kwargs), so assert with
     # `mock_celery.assert_called_once_with((item_id,), {})`.
+    if find_spec("celery") is None:
+        yield None
+        return
+
+    from celery.app.task import Task
+
     with patch.object(Task, "apply_async") as mock_apply_async:
         yield mock_apply_async
 
@@ -83,7 +95,9 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
     async def override_get_db():
         yield db_session
 
-    app.dependency_overrides[get_db] = override_get_db
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        yield ac
-    app.dependency_overrides.clear()
+    api.dependency_overrides[get_db] = override_get_db
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            yield ac
+    finally:
+        api.dependency_overrides.clear()

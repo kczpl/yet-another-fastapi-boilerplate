@@ -5,9 +5,21 @@ on:
     branches: [master]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   checks:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        variant: [core, workers, ai]
+    env:
+      DATABASE_URL: postgresql://app_test:app_test@localhost:5433/app_test
     services:
       postgres:
         image: postgres:18
@@ -19,23 +31,53 @@ jobs:
           - 5433:5432
         options: >-
           --health-cmd "pg_isready -U app_test -d app_test"
-          --health-interval 5s
+          --health-interval 2s
           --health-timeout 2s
           --health-retries 10
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
         with:
+          version: "0.12.6"
+          python-version: "3.14"
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --frozen
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          if [ "$VARIANT" = core ]; then
+            uv sync --locked
+          else
+            uv sync --locked --extra "$VARIANT"
+          fi
       - name: Lint
         run: |
-          uv run ruff format --check
-          uv run ruff check
-      - name: Type-check
-        run: uv run pyright
+          uv run --no-sync ruff format --check
+          uv run --no-sync ruff check
+      - name: Type-check all optional modules
+        if: matrix.variant == 'ai'
+        run: uv run --no-sync pyright
       - name: Cognitive complexity
-        run: uv run complexipy
+        run: uv run --no-sync complexipy
+      - name: Migration round trip and model drift
+        run: |
+          uv run --no-sync alembic -c alembic/alembic.ini upgrade head
+          uv run --no-sync alembic -c alembic/alembic.ini check
+          uv run --no-sync alembic -c alembic/alembic.ini downgrade base
+          uv run --no-sync alembic -c alembic/alembic.ini upgrade head
       - name: Tests
-        run: uv run pytest
+        run: uv run --no-sync pytest
+      - name: Worker task discovery
+        if: matrix.variant != 'core'
+        run: |
+          uv run --no-sync python -c 'from app.workers.celery import celery; celery.loader.import_default_modules(); assert "tasks.example_cleanup" in celery.tasks'
+      - name: Build runtime image
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          extra="$VARIANT"
+          if [ "$VARIANT" = core ]; then extra=""; fi
+          docker build --build-arg APP_EXTRA="$extra" --tag template:test .
+      - name: Runtime import without development dependencies
+        run: |
+          docker run --rm -e DATABASE_URL=postgresql://unused template:test /app/.venv/bin/python -c 'import app.main; import sys; from uuid import uuid7; assert sys.version_info[:2] == (3, 14); assert uuid7().version == 7'

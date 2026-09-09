@@ -20,7 +20,7 @@ def upgrade() -> None:
     op.create_table(
         "items",
         # uuidv7() is a native Postgres 18 function; ORM inserts supply the id via
-        # app.utils.uuid.uuid7, raw SQL inserts fall back to this server default.
+        # uuid.uuid7, raw SQL inserts fall back to this server default.
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuidv7()")),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),

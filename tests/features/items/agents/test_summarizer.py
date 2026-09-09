@@ -1,3 +1,7 @@
+import pytest
+
+pytest.importorskip("pydantic_ai")
+
 from app.features.items.agents.summarizer import TextSummary
 
 

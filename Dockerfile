@@ -1,6 +1,6 @@
-FROM python:3.13-slim
+FROM python:3.14-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.8 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.6 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1
 WORKDIR /app
@@ -8,13 +8,16 @@ WORKDIR /app
 # Runtime image: no dev tooling (tests, linters). watchfiles used by docker-compose
 # for reload comes with uvicorn[standard].
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-cache
+ARG APP_EXTRA=""
+RUN if [ -n "$APP_EXTRA" ]; then \
+      uv sync --frozen --no-dev --no-cache --extra "$APP_EXTRA"; \
+    else \
+      uv sync --frozen --no-dev --no-cache; \
+    fi
 
 COPY app ./app
 COPY alembic ./alembic
-COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh && useradd --system --no-create-home app && chown app /app
+RUN useradd --system --no-create-home app && chown app /app
 USER app
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--port", "8000", "--host", "0.0.0.0"]

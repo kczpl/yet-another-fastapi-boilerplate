@@ -6,7 +6,7 @@ from celery.schedules import crontab
 from celery.signals import setup_logging as celery_setup_logging
 from celery.signals import task_prerun
 
-from app.core.config import celery_config, database_config
+from app.core.config import celery_config
 from app.core.logger import bind_context, clear_context, setup_logging
 from app.integrations.sentry.client import init_sentry
 
@@ -31,7 +31,7 @@ def _bind_task_context(task_id: str | None = None, task: Any = None, **_):
 
 celery = Celery(
     "app",
-    broker=database_config.REDIS_URL,
+    broker=celery_config.REDIS_URL,
     task_cls="app.workers.base:BaseTask",
 )
 

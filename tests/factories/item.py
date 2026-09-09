@@ -1,6 +1,6 @@
 from factory.declarations import Sequence
 
-from app.repositories.items.models import Item
+from app.features.items.models import Item
 from tests.factories.base import BaseFactory, BaseMetaFactory
 
 
