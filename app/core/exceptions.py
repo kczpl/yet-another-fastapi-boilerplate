@@ -1,9 +1,9 @@
+from collections.abc import Mapping
 from typing import Never
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 from starlette.exceptions import HTTPException
 
 from app.core.errors import ERRORS
@@ -15,7 +15,6 @@ class APIException(HTTPException):
         if error_key not in ERRORS:
             raise ValueError(f"unregistered error key {error_key!r} — add it to ERRORS in app/core/errors.py")
         self.error_key = error_key
-        self.status_code = status_code
         self.kwargs = kwargs
         super().__init__(status_code=status_code, detail=error_key)
 
@@ -48,58 +47,71 @@ def raise_server_error(error_key: str = "server_error", **kwargs) -> Never:
     raise APIException(error_key, 500, **kwargs)
 
 
+# Errors raised by the framework itself (unknown route, wrong method, ...) are
+# mapped onto the same envelope so clients never see Starlette's {"detail": ...}.
+_HTTP_STATUS_ERRORS = {
+    400: "bad_request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    405: "method_not_allowed",
+    409: "conflict",
+    413: "file_too_large",
+    422: "validation_error",
+}
+_VALIDATION_MESSAGES = {
+    "missing": ERRORS["required_parameter_missing"],
+    "value_error": ERRORS["invalid_request_data"],
+}
+
+
+def _error_response(
+    status_code: int, error_key: str, data: dict, headers: Mapping[str, str] | None = None
+) -> JSONResponse:
+    # Wire format carries the i18n key (like MESSAGES); the short key stays in logs.
+    return JSONResponse(status_code=status_code, content={"error": ERRORS[error_key], "data": data}, headers=headers)
+
+
+# Handlers take `exc: Exception` to satisfy Starlette's signature; the assert
+# narrows the type — Starlette dispatches by exception class, so it always holds.
+
+
 async def handle_api_exception(request: Request, exc: Exception) -> JSONResponse:
-    api_exc = exc if isinstance(exc, APIException) else None
-    if api_exc is None:
-        raise exc
+    assert isinstance(exc, APIException)
+    logger = log.error if exc.status_code >= 500 else log.warning
+    logger("api_error", error_key=exc.error_key, path=request.url.path, status=exc.status_code)
+    return _error_response(exc.status_code, exc.error_key, exc.kwargs)
 
-    if api_exc.status_code >= 500:
-        log.error("api_error", error_key=api_exc.error_key, path=request.url.path, status=api_exc.status_code)
-    else:
-        log.warning("api_error", error_key=api_exc.error_key, path=request.url.path, status=api_exc.status_code)
 
-    # Wire format carries the i18n key (like MESSAGES / the validation handler);
-    # the short key stays in logs. Lookup is safe — __init__ validated the key.
-    return JSONResponse(
-        status_code=api_exc.status_code,
-        content={"error": ERRORS[api_exc.error_key], "data": api_exc.kwargs},
-    )
+async def handle_http_exception(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, HTTPException)
+    fallback = "server_error" if exc.status_code >= 500 else "bad_request"
+    error_key = _HTTP_STATUS_ERRORS.get(exc.status_code, fallback)
+    log.warning("http_error", detail=exc.detail, path=request.url.path, status=exc.status_code)
+    return _error_response(exc.status_code, error_key, {"detail": exc.detail}, headers=exc.headers)
 
 
 async def handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
-    validation_exc = exc if isinstance(exc, RequestValidationError | ValidationError) else None
-    if validation_exc is None:
-        raise exc
-
-    details = []
-    for error in validation_exc.errors():
-        field = ".".join(str(x) for x in error.get("loc", ()))
-        error_type = error.get("type", "")
-        if error_type == "missing":
-            message = ERRORS["required_parameter_missing"]
-        elif error_type in ("value_error", "type_error"):
-            message = ERRORS["invalid_request_data"]
-        else:
-            message = ERRORS["validation_error"]
-        details.append({"field": field, "message": message, "type": error_type})
-
-    log.warning("validation_error", details=details)
-    return JSONResponse(
-        status_code=422,
-        content={"error": ERRORS["validation_error"], "data": {"details": details}},
-    )
+    assert isinstance(exc, RequestValidationError)
+    details = [
+        {
+            "field": ".".join(str(part) for part in error["loc"]),
+            "message": _VALIDATION_MESSAGES.get(error["type"], ERRORS["validation_error"]),
+            "type": error["type"],
+        }
+        for error in exc.errors()
+    ]
+    log.warning("validation_error", path=request.url.path, details=details)
+    return _error_response(422, "validation_error", {"details": details})
 
 
 async def handle_generic_exception(request: Request, exc: Exception) -> JSONResponse:
-    log.error("generic_exception", exception=f"{type(exc).__name__}: {exc}", path=request.url.path)
-    return JSONResponse(
-        status_code=500,
-        content={"error": ERRORS["server_error"], "data": {}},
-    )
+    log.error("unhandled_exception", exc_info=exc, path=request.url.path)
+    return _error_response(500, "server_error", {})
 
 
 def setup_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(APIException, handle_api_exception)
+    app.add_exception_handler(HTTPException, handle_http_exception)
     app.add_exception_handler(RequestValidationError, handle_validation_error)
-    app.add_exception_handler(ValidationError, handle_validation_error)
     app.add_exception_handler(Exception, handle_generic_exception)

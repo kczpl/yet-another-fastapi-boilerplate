@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from pydantic import BaseModel, Field, model_validator
 from pydantic_ai import Agent
 
@@ -6,8 +8,8 @@ from app.core.config import ai_config
 from app.core.logger import log
 
 # Example flat (single-file) agent, colocated with the feature that uses it. The
-# whole module is: model constant, output model + validator, the Agent built at
-# import time, and one async wrapper. General config lives in app/core/agents.py.
+# whole module is: model constant, output model + validator, a cached Agent created on
+# first use, and one async wrapper. General config lives in app/core/agents.py.
 # See .claude/rules/backend/ai-agents.md for the full conventions.
 
 MODEL = ai_config.BEDROCK_MODEL
@@ -32,19 +34,22 @@ class TextSummary(BaseModel):
         return self
 
 
-summarizer_agent = Agent(
-    get_model(MODEL),
-    name="text-summarizer",
-    output_type=TextSummary,
-    instructions=SUMMARIZER_PROMPT,
-    model_settings=get_model_settings(),
-    retries=2,
-)
+@lru_cache(maxsize=1)
+def get_summarizer() -> Agent[None, TextSummary]:
+    # Creating the provider can load AWS credentials. Do it on first use after fork.
+    return Agent(
+        get_model(MODEL),
+        name="text-summarizer",
+        output_type=TextSummary,
+        instructions=SUMMARIZER_PROMPT,
+        model_settings=get_model_settings(),
+        retries=2,
+    )
 
 
 async def summarize_text(text: str) -> TextSummary:
     log.debug("text_summarization_started", chars=len(text))
-    result = await summarizer_agent.run(text, usage_limits=get_usage_limits())
+    result = await get_summarizer().run(text, usage_limits=get_usage_limits())
     log_agent_cost(
         "text_summarization_completed",
         result.usage(),

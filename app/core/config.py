@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,8 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Config(BaseSettings):
     VERSION: str = "0.0.1"
-    ENVIRONMENT: str = "development"
-    TIMEZONE: str = "UTC"
+    ENVIRONMENT: Literal["development", "local", "staging", "production"] = "development"
     LOG_LEVEL: str = "INFO"
 
     SENTRY_DSN: str | None = None
@@ -39,40 +38,12 @@ class Config(BaseSettings):
 
 class DatabaseConfig(Config):
     DATABASE_URL: str
-    REDIS_URL: str = "redis://localhost:6379/0"
 
-    POOL_SIZE: int | None = None
-    POOL_MAX_OVERFLOW: int | None = None
-    POOL_TIMEOUT: int | None = None
-    POOL_RECYCLE: int | None = None
-
-    @model_validator(mode="after")
-    def set_environment_defaults(self) -> Self:
-        if self.is_production:
-            self.POOL_SIZE = self.POOL_SIZE or 20
-            self.POOL_MAX_OVERFLOW = self.POOL_MAX_OVERFLOW or 10
-            self.POOL_TIMEOUT = self.POOL_TIMEOUT or 30
-            self.POOL_RECYCLE = self.POOL_RECYCLE or 3600
-        elif self.is_staging:
-            self.POOL_SIZE = self.POOL_SIZE or 15
-            self.POOL_MAX_OVERFLOW = self.POOL_MAX_OVERFLOW or 5
-            self.POOL_TIMEOUT = self.POOL_TIMEOUT or 30
-            self.POOL_RECYCLE = self.POOL_RECYCLE or 3600
-        else:
-            self.POOL_SIZE = self.POOL_SIZE or 5
-            self.POOL_MAX_OVERFLOW = self.POOL_MAX_OVERFLOW or 2
-            self.POOL_TIMEOUT = self.POOL_TIMEOUT or 30
-            self.POOL_RECYCLE = self.POOL_RECYCLE or 1800
-
-        return self
-
-
-class AWSConfig(Config):
-    # Credentials are only needed for AWS Bedrock (AI agents). Leave unset to fall
-    # back to the default boto3 credential chain (env / profile / instance role).
-    AWS_REGION: str = "eu-central-1"
-    AWS_ACCESS_KEY: str | None = None
-    AWS_SECRET_KEY: str | None = None
+    # Conservative defaults per process. Tune for the database connection budget.
+    POOL_SIZE: int = 5
+    POOL_MAX_OVERFLOW: int = 2
+    POOL_TIMEOUT: int = 30
+    POOL_RECYCLE: int = 1800
 
 
 class AIConfig(Config):
@@ -93,37 +64,23 @@ class AIConfig(Config):
 
 
 class ApiConfig(Config):
-    SHOW_DOCS: bool = True
+    SHOW_DOCS: bool | None = None
     CORS_ORIGINS: list[str] = []
 
     @model_validator(mode="after")
     def set_environment_defaults(self) -> Self:
-        if self.is_production:
-            self.CORS_ORIGINS = self.CORS_ORIGINS or ["https://app.example.com"]
-            self.SHOW_DOCS = False
-        elif self.is_staging:
-            self.CORS_ORIGINS = self.CORS_ORIGINS or ["https://app-staging.example.com"]
-        else:
-            self.CORS_ORIGINS = self.CORS_ORIGINS or [
-                "http://localhost:3000",
-                "http://localhost:5173",
-            ]
-
+        if self.SHOW_DOCS is None:
+            self.SHOW_DOCS = self.is_development
         return self
 
 
 class CeleryConfig(Config):
+    REDIS_URL: str = "redis://localhost:6379/0"
     TASK_TIME_LIMIT: int = 600
     # One task at a time per worker process — scale out by running more worker
     # containers, not by raising per-worker concurrency. Override via env if needed.
     WORKER_CONCURRENCY: int = 1
     WORKER_MAX_TASKS_PER_CHILD: int = 1000
-
-    @model_validator(mode="after")
-    def set_environment_defaults(self) -> Self:
-        if self.is_production:
-            self.WORKER_MAX_TASKS_PER_CHILD = 500
-        return self
 
 
 ################################################################################
@@ -133,5 +90,4 @@ class CeleryConfig(Config):
 api_config = ApiConfig()
 celery_config = CeleryConfig()
 database_config = DatabaseConfig()  # type: ignore[call-arg]
-aws_config = AWSConfig()
 ai_config = AIConfig()

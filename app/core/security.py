@@ -1,10 +1,11 @@
-import json
 import time
 import uuid
 
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from guard.middleware import SecurityMiddleware
-from guard.models import SecurityConfig
+from starlette.datastructures import Headers, MutableHeaders
+from starlette.exceptions import HTTPException
+from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.config import api_config
@@ -12,20 +13,33 @@ from app.core.errors import ERRORS
 from app.core.logger import bind_context, clear_context, log
 
 MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10MB
-MAX_UPLOAD_REQUEST_SIZE = 200 * 1024 * 1024  # 200MB (upload endpoints)
-# Substring match — add upload route prefixes here that should allow large bodies.
-LARGE_BODY_PATHS: tuple[str, ...] = ()
 HEALTHCHECK_PATH = "/up"  # liveness probe — skip logging
 
+# Browser-facing hardening headers. Rate limiting, IP filtering and WAF rules
+# belong at the edge (load balancer / reverse proxy), not in the app process.
+SECURITY_HEADERS = {
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+}
 
-def _get_header(headers: list[tuple[bytes, bytes]], name: bytes) -> str | None:
-    for header_name, header_value in headers:
-        if header_name == name:
-            return header_value.decode("latin-1")
-    return None
+
+def _response_headers(message: Message) -> MutableHeaders:
+    message.setdefault("headers", [])
+    return MutableHeaders(scope=message)
+
+
+def _client_ip(scope: Scope) -> str:
+    # Uvicorn resolves forwarded headers only for explicitly trusted proxies.
+    client = scope.get("client")
+    return client[0] if client else "unknown"
 
 
 class LoggingMiddleware:
+    # Generates/propagates X-Request-ID, binds it to the log context and logs one
+    # line per request with method, path, status, duration and client IP.
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
@@ -35,12 +49,7 @@ class LoggingMiddleware:
             return
 
         clear_context()
-        headers = scope["headers"]
-        request_id = _get_header(headers, b"x-request-id") or str(uuid.uuid4())
-        xff = _get_header(headers, b"x-forwarded-for")
-        client = scope.get("client")
-        client_ip = xff.split(",")[0].strip() if xff else (client[0] if client else "unknown")
-
+        request_id = Headers(scope=scope).get("x-request-id") or str(uuid.uuid4())
         bind_context(request_id=request_id)
         status_code = 500
         start_time = time.perf_counter()
@@ -49,9 +58,7 @@ class LoggingMiddleware:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
-                raw_headers = list(message.get("headers", []))
-                raw_headers.append((b"x-request-id", request_id.encode("latin-1")))
-                message = {**message, "headers": raw_headers}
+                _response_headers(message)["X-Request-ID"] = request_id
             await send(message)
 
         try:
@@ -64,11 +71,13 @@ class LoggingMiddleware:
                 path=scope["path"],
                 status_code=status_code,
                 duration=f"{duration:.3f}s",
-                client_ip=client_ip,
+                client_ip=_client_ip(scope),
             )
+            clear_context()
 
 
 class RequestSizeLimitMiddleware:
+    # Check Content-Length early, then count actual bytes (including chunked input).
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
@@ -77,60 +86,56 @@ class RequestSizeLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
-        if scope["method"] in ("POST", "PUT", "PATCH"):
-            content_length = _get_header(scope["headers"], b"content-length")
-            limit = MAX_UPLOAD_REQUEST_SIZE if any(p in scope["path"] for p in LARGE_BODY_PATHS) else MAX_REQUEST_SIZE
-            if content_length and int(content_length) > limit:
-                body = json.dumps({"error": ERRORS["file_too_large"], "data": {}}).encode("utf-8")
-                await send(
-                    {
-                        "type": "http.response.start",
-                        "status": 413,
-                        "headers": [
-                            (b"content-type", b"application/json"),
-                            (b"content-length", str(len(body)).encode("latin-1")),
-                        ],
-                    }
-                )
-                await send({"type": "http.response.body", "body": body})
-                return
+        try:
+            content_length = int(Headers(scope=scope).get("content-length") or 0)
+            if content_length < 0:
+                raise ValueError("negative content length")
+        except ValueError:
+            response = JSONResponse(status_code=400, content={"error": ERRORS["bad_request"], "data": {}})
+            await response(scope, receive, send)
+            return
 
-        await self.app(scope, receive, send)
+        if content_length > MAX_REQUEST_SIZE:
+            response = JSONResponse(status_code=413, content={"error": ERRORS["file_too_large"], "data": {}})
+            await response(scope, receive, send)
+            return
 
+        bytes_read = 0
 
-def get_guard_security_config() -> SecurityConfig:
-    return SecurityConfig(
-        rate_limit=1000,
-        rate_limit_window=60,
-        enforce_https=False,
-        # CORS is handled by Starlette CORSMiddleware below so browser preflight
-        # is answered before FastAPI route matching.
-        enable_cors=False,
-        block_cloud_providers=set(),
-        blocked_user_agents=[],
-        blocked_countries=[],
-        whitelist=[],
-        blacklist=[],
-        enable_penetration_detection=False,
-        security_headers={
-            "enabled": True,
-            "hsts": {"max_age": 31536000, "include_subdomains": True, "preload": True},
-            "frame_options": "DENY",
-            "content_type_options": "nosniff",
-            "referrer_policy": "strict-origin-when-cross-origin",
-            "cross_origin_resource_policy": "same-origin",
-        },
-    )
+        async def limited_receive() -> Message:
+            nonlocal bytes_read
+            message = await receive()
+            bytes_read += len(message.get("body", b""))
+            if bytes_read > MAX_REQUEST_SIZE:
+                raise HTTPException(status_code=413, detail="Request body too large")
+            return message
+
+        await self.app(scope, limited_receive, send)
 
 
-def setup_security_middleware(app) -> None:
-    # Added last → outermost. Execution order (outer → inner):
-    # CORS → Logging → RequestSizeLimit → guard SecurityMiddleware.
-    app.add_middleware(SecurityMiddleware, config=get_guard_security_config())
+class SecurityHeadersMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                _response_headers(message).update(SECURITY_HEADERS)
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+def setup_security_middleware(app: FastAPI) -> ASGIApp:
+    # Body errors are handled inside FastAPI. Response wrappers surround the
+    # entire app so even ServerErrorMiddleware's 500 response gets their headers.
     app.add_middleware(RequestSizeLimitMiddleware)
-    app.add_middleware(LoggingMiddleware)
-    app.add_middleware(
-        CORSMiddleware,
+    return CORSMiddleware(
+        SecurityHeadersMiddleware(LoggingMiddleware(app)),
         allow_origins=api_config.CORS_ORIGINS,
         allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         allow_headers=["*"],

@@ -1,57 +1,68 @@
 [project]
 name = "app"
 version = "0.0.1"
-description = "Minimal FastAPI + Celery boilerplate"
+description = "Feature-based FastAPI boilerplate with optional workers and AI"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     # core
     "fastapi>=0.125.0",
-    "fastapi-guard>=4.2.2",
     "uvicorn[standard]>=0.38.0",
+    "pydantic>=2.12.0",
     "pydantic-settings>=2.12.0",
-    "httpx>=0.28.1",
     # db
-    "sqlalchemy>=2.0.45",
-    "psycopg[binary,pool]>=3.3.2",
+    "sqlalchemy[asyncio]>=2.0.45",
+    "psycopg[binary]>=3.3.2",
     "alembic>=1.17.2",
-    "greenlet>=3.3.0",
-    "uuid-utils>=0.10",
-    # worker
-    "celery[redis]>=5.6.0",
-    "redis>=5.2.0",
-    # ai (pydantic-ai + AWS Bedrock)
-    "pydantic-ai-slim[anthropic,bedrock]>=1.35.0",
-    "boto3>=1.35.0",
-    "genai-prices>=0.0.66",
     # observability
-    "sentry-sdk[celery,fastapi,sqlalchemy]>=2.48.0",
+    "sentry-sdk>=2.48.0",
     "structlog>=25.5.0",
+]
+
+[project.optional-dependencies]
+workers = ["celery[redis]>=5.6.0"]
+ai = [
+    "celery[redis]>=5.6.0",
+    "pydantic-ai-slim[bedrock]>=1.35.0",
+    "genai-prices>=0.0.66",
 ]
 
 [dependency-groups]
 dev = [
+    "complexipy>=8.0.1",
     "factory-boy>=3.3.3",
+    "httpx>=0.28.1",
+    "pyright>=1.1.408",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.1.0",
     "ruff>=0.9.2",
-    "watchfiles>=1.1.1",
 ]
 
 [tool.ruff]
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "ASYNC", "N", "T20"]
 ignore = [
     "B008",  # FastAPI Depends() in default arguments — intentional pattern
     "E501",  # line-too-long — formatting handled by ruff format
+    "N818",  # APIException mirrors Starlette's HTTPException naming
     "UP046", # keep Generic[T] base (Pydantic generic models); don't force PEP 695
     "UP047", # keep classic generic function syntax
 ]
 
+[tool.ruff.lint.isort]
+# The alembic/ directory would otherwise make the alembic *library* look first-party.
+known-third-party = ["alembic"]
+
+# Cognitive complexity gate (SonarSource metric): `just complexity`. Functions
+# above the limit fail CI — split them instead of raising the limit.
+[tool.complexipy]
+paths = ["app", "tests", "alembic"]
+max-complexity-allowed = 10
+
 [tool.pyright]
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
@@ -60,10 +71,8 @@ exclude = ["**/node_modules", "**/__pycache__", "**/.*", "alembic/versions"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
 filterwarnings = [
     "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
 ]

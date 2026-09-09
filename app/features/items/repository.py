@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.items.models import Item
+from app.features.items.models import Item
 
 # Repository functions never commit — they flush to materialize IDs/defaults. The
 # transaction belongs to the caller (route service commits; Celery auto-commits).
@@ -27,14 +27,15 @@ async def list_items_with_count(
     limit: int,
     offset: int,
 ) -> tuple[list[Item], int]:
-    # Window function gets the total count in the same query — no second round-trip.
-    total_count_expr = func.count().over().label("total_count")
-    stmt = select(Item, total_count_expr).order_by(Item.created_at.desc()).limit(limit).offset(offset)
+    # A separate count also works when the requested page is past the last row.
+    total = await count_items(db)
+    stmt = select(Item).order_by(Item.created_at.desc(), Item.id.desc()).limit(limit).offset(offset)
+    items = await db.scalars(stmt)
+    return list(items), total
 
-    rows = (await db.execute(stmt)).all()
-    if not rows:
-        return [], 0
-    return [row[0] for row in rows], rows[0][1]
+
+async def count_items(db: AsyncSession) -> int:
+    return (await db.scalar(select(func.count()).select_from(Item))) or 0
 
 
 async def set_item_summary(db: AsyncSession, item: Item, summary: str) -> Item:
