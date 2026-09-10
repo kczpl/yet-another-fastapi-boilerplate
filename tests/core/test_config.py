@@ -22,3 +22,9 @@ def test_unknown_environment_is_rejected():
 
 def test_docs_are_disabled_by_default_in_production():
     assert ApiConfig(ENVIRONMENT="production", SHOW_DOCS=None).SHOW_DOCS is False
+
+
+@pytest.mark.parametrize("timeout", [599, 600])
+def test_visibility_timeout_must_exceed_task_limit(timeout: int):
+    with pytest.raises(ValidationError, match="BROKER_VISIBILITY_TIMEOUT must exceed"):
+        CeleryConfig(TASK_TIME_LIMIT=600, BROKER_VISIBILITY_TIMEOUT=timeout)

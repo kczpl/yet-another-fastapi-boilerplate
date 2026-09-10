@@ -23,6 +23,7 @@ Patch third-party APIs and Celery publishing. `mock_celery` prevents task `.dela
 `.apply_async()` from contacting Redis. AI tests use importorskip when extras are absent and
 patch the async model wrapper. Never call live models in CI. Workers and AI must remain
 optional: CI runs core, workers and AI separately, including runtime image imports.
+Routing tests use a real Kombu memory transport and an explicit producer; they require no Redis.
 
 Test observable behavior and important boundaries: transaction ownership, constraints,
 serialization, out-of-range pagination, middleware 500 responses, request limits and migrations.

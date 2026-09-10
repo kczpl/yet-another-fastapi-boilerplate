@@ -1,6 +1,6 @@
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ################################################################################
@@ -76,11 +76,18 @@ class ApiConfig(Config):
 
 class CeleryConfig(Config):
     REDIS_URL: str = "redis://localhost:6379/0"
-    TASK_TIME_LIMIT: int = 600
+    TASK_TIME_LIMIT: int = Field(default=600, ge=2)
+    BROKER_VISIBILITY_TIMEOUT: int = Field(default=3600, gt=0)
     # One task at a time per worker process — scale out by running more worker
     # containers, not by raising per-worker concurrency. Override via env if needed.
-    WORKER_CONCURRENCY: int = 1
-    WORKER_MAX_TASKS_PER_CHILD: int = 1000
+    WORKER_CONCURRENCY: int = Field(default=1, gt=0)
+    WORKER_MAX_TASKS_PER_CHILD: int = Field(default=1000, gt=0)
+
+    @model_validator(mode="after")
+    def validate_visibility_timeout(self) -> Self:
+        if self.BROKER_VISIBILITY_TIMEOUT <= self.TASK_TIME_LIMIT:
+            raise ValueError("BROKER_VISIBILITY_TIMEOUT must exceed TASK_TIME_LIMIT")
+        return self
 
 
 ################################################################################

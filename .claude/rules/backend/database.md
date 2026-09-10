@@ -18,6 +18,7 @@ in `app/models.py` for Alembic; avoid automatic import discovery.
 - String + CheckConstraint for statuses; no PostgreSQL ENUM dependency.
 - Explicit public schema. Naming conventions produce `{table}_pkey`, `{table}_{column}_key`,
   `{table}_{column}_fkey`, `{table}_{constraint}_check`, `{table}_{column}_idx`.
+  Composite indexes/constraints include all participating column names, joined with underscores.
 - Match server defaults, constraints and indexes between models and migrations so `alembic check`
   stays clean. Declare indexes used by real queries in metadata too; don't hide them from autogenerate.
 - Add indexes for actual query patterns; avoid speculative indexing.
@@ -37,8 +38,13 @@ product requirements demand them.
 ## Migrations
 
 `just makemigration "description"` generates revisions; post-write Ruff hooks format them.
+Filenames use `YYYY_MM_DD_HHMM-<revision>_<slug>.py` in UTC. Hooks use the active Python
+environment, which must include Ruff; deployment images only apply existing migrations.
 Migrations are static and include upgrade/downgrade. All table operations name schema="public".
 The Alembic URL comes from the same env/.env settings as the API, with ConfigParser escaping.
+The version table is explicitly in public. Autogenerate only inspects registered model tables
+in public and ignores unrelated tables. Removing a model therefore requires an explicit
+drop_table migration; review all generated operations, including destructive column changes.
 
 Tests create schemas by applying migrations. CI runs upgrade → check → downgrade → upgrade.
 Compose runs one migration service before API/workers; images do not migrate on every startup.

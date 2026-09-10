@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import Never
+from typing import Never, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -72,19 +72,18 @@ def _error_response(
     return JSONResponse(status_code=status_code, content={"error": ERRORS[error_key], "data": data}, headers=headers)
 
 
-# Handlers take `exc: Exception` to satisfy Starlette's signature; the assert
-# narrows the type — Starlette dispatches by exception class, so it always holds.
+# Starlette dispatches by registered exception type; casts narrow its generic signature.
 
 
 async def handle_api_exception(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, APIException)
+    exc = cast(APIException, exc)
     logger = log.error if exc.status_code >= 500 else log.warning
     logger("api_error", error_key=exc.error_key, path=request.url.path, status=exc.status_code)
     return _error_response(exc.status_code, exc.error_key, exc.kwargs)
 
 
 async def handle_http_exception(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, HTTPException)
+    exc = cast(HTTPException, exc)
     fallback = "server_error" if exc.status_code >= 500 else "bad_request"
     error_key = _HTTP_STATUS_ERRORS.get(exc.status_code, fallback)
     log.warning("http_error", detail=exc.detail, path=request.url.path, status=exc.status_code)
@@ -92,7 +91,7 @@ async def handle_http_exception(request: Request, exc: Exception) -> JSONRespons
 
 
 async def handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, RequestValidationError)
+    exc = cast(RequestValidationError, exc)
     details = [
         {
             "field": ".".join(str(part) for part in error["loc"]),
