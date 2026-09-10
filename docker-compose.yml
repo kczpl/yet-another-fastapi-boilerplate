@@ -36,7 +36,9 @@ services:
       context: .
       args:
         APP_EXTRA: ${APP_EXTRA:-workers}
-    command: /app/.venv/bin/watchfiles --filter python "/app/.venv/bin/celery -A app.workers.celery:celery worker --loglevel=info -Q default,heavy" ./app
+    command: /app/.venv/bin/celery -A app.workers.celery:celery worker --loglevel=info -Q default,heavy
+    restart: unless-stopped
+    stop_grace_period: ${WORKER_STOP_GRACE_PERIOD:-11m}
     volumes:
       - ./app:/app/app
     depends_on:
@@ -52,9 +54,11 @@ services:
       context: .
       args:
         APP_EXTRA: ${APP_EXTRA:-workers}
-    command: /app/.venv/bin/celery -A app.workers.celery:celery beat --loglevel=info
+    command: /app/.venv/bin/celery -A app.workers.celery:celery beat --loglevel=info --schedule=/var/lib/celery/celerybeat-schedule
+    restart: unless-stopped
     volumes:
       - ./app:/app/app
+      - celery_beat_data:/var/lib/celery
     depends_on:
       redis:
         condition: service_healthy
@@ -92,6 +96,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes --appendfsync always --maxmemory-policy noeviction
+    restart: unless-stopped
     profiles: [workers]
     ports:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
@@ -106,3 +112,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  celery_beat_data:
