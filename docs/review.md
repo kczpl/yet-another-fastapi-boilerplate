@@ -82,7 +82,62 @@ Osobny COUNT i lista przy READ COMMITTED mogą zobaczyć równoczesne zmiany; AP
 obiecuje snapshotu. `/up` sprawdza proces, nie gotowość wszystkich zależności.
 Te ograniczenia są jawne w README, bez dokładania niepotrzebnej infrastruktury.
 
-## Weryfikacja
+## Dodatkowy przegląd: Alembic, Ruff i Celery
+
+Po scaleniu PR #1 sprawdzono konfigurację tych trzech narzędzi na jego aktualnym
+stanie (`6db783a`). Wnioski i poprawki:
+
+| Obszar | Ocena i zmiana |
+|---|---|
+| Alembic: nazwy | Format był spójny: `YYYY_MM_DD_HHMM-<revision>_<slug>.py`. Dodano UTC, żeby nazwa nie zależała od strefy autora, oraz `alembic[tz]` dla przenośnego dostępu do stref. Kolejność migracji nadal określa `down_revision`. |
+| Alembic: schema | Modele już używały `public`, ale tabela wersji zależała od domyślnego schematu połączenia. Jawne `version_table_schema="public"` działa teraz online i offline. |
+| Alembic: autogenerate | Samo `include_schemas=True` mogło proponować usunięcie cudzych tabel. Filtr ogranicza introspekcję do `public` i tabel z rejestru modeli, uwzględniając alias domyślnego schematu także przy zmienionym `search_path`. |
+| Alembic: narzędzia i constraints | Ruff uruchamia się przez aktywnego Pythona zamiast ścieżki `.venv/bin/ruff`. Pusta migracja przechodzi lint. Nazwy indeksów, unique i FK uwzględniają wszystkie kolumny; dwa indeksy z tą samą pierwszą kolumną nie kolidują. Obecne nazwy jednokolumnowe się nie zmieniają. |
+| Ruff | Dotychczasowy zestaw dobrze pokrywał podstawy, async i uproszczenia. Dodano `S`, `DTZ`, `T10`, `PT`, `PIE`, `RET`: wzorce bezpieczeństwa, czas, debugger, pytest i redundantny kod. Usunięto globalne wyłączenie `B008`; znane markery FastAPI mają wąski wyjątek. `S101` jest wyłączone tylko w testach, a `N818` tylko w module wyjątków. |
+| Celery: routing | Domyślna kolejka Celery nazywała się `celery`, podczas gdy worker konsumuje `default,heavy`. Zadania bez jawnej kolejki trafiają teraz do `default`; obie kolejki są zadeklarowane, a literówki odrzucane przed publikacją. |
+| Celery: trwałość | Sam wolumen Redisa i persistent delivery nie wystarczały do trwałego zapisu ostatnich wiadomości. Compose włącza AOF, `appendfsync always` i `noeviction`. Beat ma osobny wolumen na harmonogram i synchronizację po każdym wysłaniu. |
+| Celery: awarie i zamykanie | Zachowano late ACK, reject-on-worker-lost i prefetch=1. Dodano anulowanie niezakończonych zadań przy utracie połączenia oraz jawny, skończony budżet retry producenta. Worker ponawia połączenia bez limitu. Compose uruchamia Celery bez wrappera reload, przekazuje SIGTERM i daje 11 minut na zakończenie pracy. |
+| Celery: timeouty | Visibility timeout jest konfigurowalny i walidowany względem globalnego hard limitu. Limity, concurrency i liczba zadań na proces mają walidację dodatnich wartości. Zwykłe błędy/time-outy są ACK-owane; retry błędów przejściowych pozostaje decyzją konkretnego zadania. |
+
+Filtrowanie tabel to celowy kompromis bezpieczeństwa: **usunięcie modelu wymaga
+ręcznie napisanej, sprawdzonej migracji `drop_table`**. Alembic nadal może proponować
+destrukcyjne zmiany kolumn w zarządzanych tabelach, więc wynik autogenerate wymaga
+review. Nie zmieniano istniejącej migracji ani schematu danych aplikacji.
+[Dokumentacja filtrowania Alembica](https://alembic.sqlalchemy.org/en/latest/autogenerate.html#omitting-table-names-from-the-autogenerate-process).
+
+Ruff nie zastępuje kontroli typów ani złożoności. Pozostają Pyright i complexipy
+z limitem 10; dodawanie `ALL` lub drugiej bramki złożoności nie jest potrzebne.
+Reguły dobrano z [katalogu Ruff](https://docs.astral.sh/ruff/rules/), a wyjątki dla
+markerów FastAPI korzystają z [konfiguracji B008](https://docs.astral.sh/ruff/settings/#lint_flake8-bugbear_extend-immutable-calls).
+
+**Granice niezawodności:** pojedynczy Redis nie daje HA ani ochrony przed utratą
+dysku/węzła. Fsync każdego zapisu kosztuje throughput. Przy wdrażaniu tej zmiany
+na istniejącym wolumenie RDB trzeba zrobić backup i włączyć AOF online, poczekać
+na zakończenie przepisywania, dopiero potem restartować z nową konfiguracją;
+samo przełączenie konfiguracji przy restarcie może utracić stare dane.
+[Redis: persistence i przejście na AOF](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/).
+
+Zadania muszą tolerować ponowne wykonanie, a `max_retries` samo nie włącza retry.
+Nie ma exactly-once, atomowego commitu DB + publikacji ani gwarancji nadrobienia
+przegapionych uruchomień beat. Visibility timeout musi obejmować także hard limity
+nadpisane w dekoratorach oraz czas ETA/countdown; walidator zna tylko limit globalny.
+Po utracie całego workera redelivery może czekać do końca visibility timeout.
+[Celery: Redis i visibility timeout](https://docs.celeryq.dev/en/v5.6.0/getting-started/backends-and-brokers/redis.html),
+[Celery: przerwanie zadania przy utracie połączenia](https://docs.celeryq.dev/en/stable/userguide/configuration.html#worker-cancel-long-running-tasks-on-connection-loss).
+
+Weryfikacja dodatkowego przeglądu:
+
+- **59 testów** w wariancie AI, w tym generowanie rzeczywistej migracji z UTC i lintem,
+  SQL offline, izolacja obcych tabel przy innym `search_path`, indeksy złożone,
+  walidacja timeoutu oraz publikacja/routing przez transport pamięciowy Kombu.
+- Ruff, Pyright i complexipy przechodzą; najwyższa złożoność nadal **7**.
+- Zbudowano obraz workers bez narzędzi dev; użytkownik non-root może zapisać harmonogram beat.
+- W osobnym testowym Redisie wiadomość Celery przetrwała **SIGKILL i restart brokera**.
+- W osobnym kontenerze workera zabito pierwszy proces prefork podczas zadania;
+  to samo zadanie zostało dostarczone ponownie i zakończyło się w drugiej próbie.
+  To test awarii procesów, bez symulowania awarii dysku lub całego hosta.
+
+## Weryfikacja pierwotnego przeglądu (PR #1)
 
 - Python 3.14.7 i PostgreSQL 18: pełny wariant AI **51 testów**, bez wywołań modelu.
 - Osobne czyste instalacje core i workers oraz testy importu runtime bez dev dependencies.

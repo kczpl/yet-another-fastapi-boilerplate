@@ -2,6 +2,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
+from alembic.runtime.environment import NameFilterParentNames
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -21,11 +22,25 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_name(name: str | None, type_: str, parent_names: NameFilterParentNames) -> bool:
+    # Alembic represents the connection's default schema as None. Resolve that
+    # alias so a role with a custom search_path cannot redirect schema inspection.
+    default_schema = context.get_context().dialect.default_schema_name
+    if type_ == "schema":
+        return (name or default_schema) == "public"
+    if type_ == "table":
+        schema = parent_names["schema_name"] or default_schema
+        return f"{schema}.{name}" in target_metadata.tables
+    return True
+
+
 def run_migrations_for_schema(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
+        version_table_schema="public",
         include_schemas=True,
+        include_name=include_name,
         compare_server_default=True,
     )
     with context.begin_transaction():
@@ -38,15 +53,18 @@ async def run_async_migrations() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    async with connectable.connect() as connection:
-        await connection.run_sync(run_migrations_for_schema)
-    await connectable.dispose()
+    try:
+        async with connectable.connect() as connection:
+            await connection.run_sync(run_migrations_for_schema)
+    finally:
+        await connectable.dispose()
 
 
 def run_migrations_offline() -> None:
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
+        version_table_schema="public",
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )

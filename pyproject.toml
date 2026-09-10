@@ -13,7 +13,7 @@ dependencies = [
     # db
     "sqlalchemy[asyncio]>=2.0.45",
     "psycopg[binary]>=3.3.2",
-    "alembic>=1.17.2",
+    "alembic[tz]>=1.17.2",
     # observability
     "sentry-sdk>=2.48.0",
     "structlog>=25.5.0",
@@ -35,21 +35,26 @@ dev = [
     "pyright>=1.1.408",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.1.0",
-    "ruff>=0.9.2",
+    "ruff>=0.15.17",
 ]
 
 [tool.ruff]
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "ASYNC", "N", "T20"]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "ASYNC", "N", "T20", "S", "DTZ", "T10", "PT", "PIE", "RET"]
 ignore = [
-    "B008",  # FastAPI Depends() in default arguments — intentional pattern
     "E501",  # line-too-long — formatting handled by ruff format
-    "N818",  # APIException mirrors Starlette's HTTPException naming
     "UP046", # keep Generic[T] base (Pydantic generic models); don't force PEP 695
     "UP047", # keep classic generic function syntax
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # pytest assertions
+"app/core/exceptions.py" = ["N818"]  # APIException mirrors HTTPException naming
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
 
 [tool.ruff.lint.isort]
 # The alembic/ directory would otherwise make the alembic *library* look first-party.

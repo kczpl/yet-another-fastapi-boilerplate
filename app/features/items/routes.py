@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, status
 
 from app.core.db import AsyncDb
@@ -22,7 +24,7 @@ async def create_item(body: ItemCreate, db: AsyncDb) -> dict:
 @router.get("/items", response_model=APIResponse[ItemListResponse])
 async def list_items(
     db: AsyncDb,
-    pagination: Pagination = Depends(pagination_params()),
+    pagination: Annotated[Pagination, Depends(pagination_params())],
 ) -> dict:
     return {"data": await ListItemsService(db).call(page=pagination.page, page_size=pagination.page_size)}
 

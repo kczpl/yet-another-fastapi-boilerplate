@@ -16,6 +16,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ba/88/6237e97e3385b57b5f1528647addea5cc03d4d65d5979ab24327d41fb00d/alembic-1.17.2-py3-none-any.whl", hash = "sha256:f483dd1fe93f6c5d49217055e4d15b905b425b6af906746abb35b69c1996c4e6", size = 248554, upload-time = "2025-11-14T20:35:05.699Z" },
 ]
 
+[package.optional-dependencies]
+tz = [
+    { name = "tzdata" },
+]
+
 [[package]]
 name = "amqp"
 version = "5.3.1"
@@ -64,7 +69,7 @@ name = "app"
 version = "0.0.1"
 source = { virtual = "." }
 dependencies = [
-    { name = "alembic" },
+    { name = "alembic", extra = ["tz"] },
     { name = "fastapi" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
@@ -98,7 +103,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "alembic", specifier = ">=1.17.2" },
+    { name = "alembic", extras = ["tz"], specifier = ">=1.17.2" },
     { name = "celery", extras = ["redis"], marker = "extra == 'ai'", specifier = ">=5.6.0" },
     { name = "celery", extras = ["redis"], marker = "extra == 'workers'", specifier = ">=5.6.0" },
     { name = "fastapi", specifier = ">=0.125.0" },
@@ -122,7 +127,7 @@ dev = [
     { name = "pyright", specifier = ">=1.1.408" },
     { name = "pytest", specifier = ">=8.4.0" },
     { name = "pytest-asyncio", specifier = ">=1.1.0" },
-    { name = "ruff", specifier = ">=0.9.2" },
+    { name = "ruff", specifier = ">=0.15.17" },
 ]
 
 [[package]]
