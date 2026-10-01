@@ -11,7 +11,7 @@ from app.core.config import database_config
 
 # PostgreSQL naming convention for constraints and indexes — applied by SQLAlchemy
 # MetaData and by Alembic ops (env.py passes target_metadata). The names it
-# produces are listed in .claude/rules/backend/database.md.
+# produces are listed in .agents/rules/backend/database.md.
 NAMING_CONVENTION = {
     "ix": "%(table_name)s_%(column_0_N_name)s_idx",
     "uq": "%(table_name)s_%(column_0_N_name)s_key",

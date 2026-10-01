@@ -44,6 +44,15 @@ test *flags="":
 
 ci: lint types complexity test
 
+# Install shared agent hooks for this checkout and its linked worktrees
+agents-install:
+  python3 .agents/hooks/install_hooks.py
+
+# Validate agent guidance and test hooks without app dependencies or a database
+agents-check:
+  python3 .agents/hooks/fastapi_rule_context.py --check
+  python3 -m unittest discover -s .agents/hooks -p 'test_*.py'
+
 # Apply migrations
 migrate:
   uv run --no-sync alembic -c alembic/alembic.ini upgrade head

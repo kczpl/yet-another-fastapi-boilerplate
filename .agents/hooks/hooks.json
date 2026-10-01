@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null) && c=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && [ \"$c\" = __REPO_COMMON_DIR__ ] && [ -f \"$r/.agents/hooks/fastapi_rule_context.py\" ] && exec python3 \"$r/.agents/hooks/fastapi_rule_context.py\"; exit 0",
+            "timeout": 10,
+            "additionalContextLimit": 4000
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null) && c=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && [ \"$c\" = __REPO_COMMON_DIR__ ] && [ -f \"$r/.agents/hooks/fastapi_rule_context.py\" ] && exec python3 \"$r/.agents/hooks/fastapi_rule_context.py\"; exit 0",
+            "timeout": 10,
+            "additionalContextLimit": 4000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "r=$(git rev-parse --show-toplevel 2>/dev/null) && c=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && [ \"$c\" = __REPO_COMMON_DIR__ ] && [ -f \"$r/.agents/hooks/fastapi_rule_context.py\" ] && exec python3 \"$r/.agents/hooks/fastapi_rule_context.py\"; exit 0",
+            "timeout": 10,
+            "additionalContextLimit": 1000
+          }
+        ]
+      }
+    ]
+  }
+}
