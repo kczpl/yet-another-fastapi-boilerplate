@@ -29,3 +29,8 @@ celerybeat-schedule*
 
 # Local request scratch files
 scripts/requests/
+
+# Personal agent settings and scratch files
+.claude/
+.codex/
+.agents/temp/

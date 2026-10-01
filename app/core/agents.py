@@ -12,7 +12,7 @@ from app.core.logger import log
 
 # General pydantic-ai / Bedrock configuration shared by every agent. Individual
 # agents live next to the feature that uses them (e.g. app/features/items/agents/).
-# See .claude/rules/backend/ai-agents.md.
+# See .agents/rules/backend/ai-agents.md.
 
 
 @lru_cache(maxsize=1)

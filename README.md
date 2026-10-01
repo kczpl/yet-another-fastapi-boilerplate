@@ -195,4 +195,5 @@ response and commit. Add locking/idempotency or a transactional outbox when a re
 workflow needs those guarantees.
 
 Detailed review and implementation decisions: [docs/review.md](docs/review.md).
-Coding guidance: [CLAUDE.md](CLAUDE.md) and `.claude/rules/backend/`.
+Coding guidance: [AGENTS.md](AGENTS.md) and `.agents/rules/backend/`.
+Optional shared hooks for Codex and Claude Code: [setup](.agents/README.md).

@@ -10,7 +10,7 @@ from app.core.logger import log
 # Example flat (single-file) agent, colocated with the feature that uses it. The
 # whole module is: model constant, output model + validator, a cached Agent created on
 # first use, and one async wrapper. General config lives in app/core/agents.py.
-# See .claude/rules/backend/ai-agents.md for the full conventions.
+# See .agents/rules/backend/ai-agents.md for the full conventions.
 
 MODEL = ai_config.BEDROCK_MODEL
 

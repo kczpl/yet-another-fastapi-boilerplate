@@ -1,4 +1,4 @@
-# Project conventions
+# Agent instructions
 
 Minimal feature-based FastAPI template. Python 3.14, PostgreSQL 18, async
 SQLAlchemy/psycopg. Celery/Redis (`workers`) and Pydantic AI/Bedrock (`ai`) are
@@ -27,11 +27,27 @@ commit. Route-facing services commit once per use case; worker services rely on
 - `app.main.api` is the FastAPI object for dependencies/OpenAPI; `app.main.app` is
   the ASGI entry point wrapped for CORS, security headers and request logging on 500s too.
 
-## Rules
+## Shared guidance
 
-Read the relevant `.claude/rules/backend/` document before editing its area:
-`core.md`, `routes.md`, `services.md`, `database.md`, `background.md`,
-`integrations.md`, `ai-agents.md`, `testing.md`.
+`AGENTS.md` and `.agents/` are the source of truth for every coding tool.
+Before editing, run this from the repository root with the intended files,
+including new files and tests:
+
+```bash
+python3 .agents/hooks/fastapi_rule_context.py --paths <file> ...
+```
+
+Read every listed rule that is not already in context. The `paths:` frontmatter
+in `.agents/rules/backend/` is the only scope index; use `--index` to list it.
+After compaction, reload the rules needed for the next edit.
+
+Optional hooks load these instructions at session start and list matching rules
+once per session. For shell commands they remind you to run the router manually.
+Read hook setup in [.agents/README.md](.agents/README.md) when changing agent configuration.
+
+Run the narrowest relevant check first and report what actually ran. Agent
+configuration changes need `just agents-check`; application changes use the
+development checks above. Keep external APIs, workers and AI optional.
 
 Keep code small without fragmenting simple workflows into one-line helpers.
 Add abstractions only for existing repetition. Never run migrations against a

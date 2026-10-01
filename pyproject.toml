@@ -51,6 +51,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]  # pytest assertions
+".agents/hooks/**" = ["T201"]  # CLI and hook output
+".agents/hooks/test_*.py" = ["PT009", "PT027", "S603"]  # stdlib unittest and fixture commands
 "app/core/exceptions.py" = ["N818"]  # APIException mirrors HTTPException naming
 
 [tool.ruff.lint.flake8-bugbear]
@@ -63,7 +65,7 @@ known-third-party = ["alembic"]
 # Cognitive complexity gate (SonarSource metric): `just complexity`. Functions
 # above the limit fail CI — split them instead of raising the limit.
 [tool.complexipy]
-paths = ["app", "tests", "alembic"]
+paths = ["app", "tests", "alembic", ".agents/hooks"]
 max-complexity-allowed = 10
 
 [tool.pyright]
