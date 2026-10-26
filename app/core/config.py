@@ -1,6 +1,6 @@
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, IPvAnyNetwork, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ################################################################################
@@ -20,15 +20,15 @@ class Config(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.ENVIRONMENT.lower() == "production"
+        return self.ENVIRONMENT == "production"
 
     @property
     def is_staging(self) -> bool:
-        return self.ENVIRONMENT.lower() == "staging"
+        return self.ENVIRONMENT == "staging"
 
     @property
     def is_development(self) -> bool:
-        return self.ENVIRONMENT.lower() in ("development", "local")
+        return self.ENVIRONMENT in ("development", "local")
 
 
 ################################################################################
@@ -49,8 +49,7 @@ class DatabaseConfig(Config):
 class AIConfig(Config):
     # Bedrock inference-profile ids are account- and region-specific — set the exact
     # ids enabled for your account. Defaults target EU inference profiles.
-    BEDROCK_MODEL: str = "eu.anthropic.claude-sonnet-4-5-20250929-v1:0"
-    BEDROCK_MODEL_HAIKU: str = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+    BEDROCK_MODEL: str = "eu.anthropic.claude-sonnet-4-6"
     BEDROCK_REGION: str = "eu-central-1"
 
     AI_MAX_TOKENS: int = 8_192
@@ -66,6 +65,10 @@ class AIConfig(Config):
 class ApiConfig(Config):
     SHOW_DOCS: bool | None = None
     CORS_ORIGINS: list[str] = []
+    # Per client IP and API process; 0 disables the limit. Strict or shared limits belong at the edge.
+    RATE_LIMIT_PER_MINUTE: int = Field(default=1000, ge=0)
+    # JSON list of addresses or CIDR networks, e.g. ["203.0.113.7", "198.51.100.0/24"].
+    BLOCKED_IPS: list[IPvAnyNetwork] = []
 
     @model_validator(mode="after")
     def set_environment_defaults(self) -> Self:

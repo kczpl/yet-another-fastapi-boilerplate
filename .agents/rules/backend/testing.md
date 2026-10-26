@@ -1,8 +1,3 @@
----
-paths:
-  - "tests/**/*.py"
----
-
 # Testing
 
 Use pytest + pytest-asyncio in auto mode. Tests and async fixtures use the same session loop,
@@ -28,3 +23,7 @@ Routing tests use a real Kombu memory transport and an explicit producer; they r
 Test observable behavior and important boundaries: transaction ownership, constraints,
 serialization, out-of-range pagination, middleware 500 responses, request limits and migrations.
 Avoid tests that just repeat implementation details. Pyright checks all modules with all extras.
+
+`tests/conftest.py` sets `RATE_LIMIT_PER_MINUTE=0`, so a long suite never reaches the limit.
+Test the limit on a `SecurityMiddleware` with a fake clock, or on a throwaway app after a
+monkeypatch of `api_config`.

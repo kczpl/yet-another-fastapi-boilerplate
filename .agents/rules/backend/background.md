@@ -1,9 +1,3 @@
----
-paths:
-  - "app/workers/**/*.py"
-  - "app/features/**/services/**/*.py"
----
-
 # Optional workers
 
 Install `workers` or `ai` with uv. Docker services use the workers profile. Celery uses Redis,

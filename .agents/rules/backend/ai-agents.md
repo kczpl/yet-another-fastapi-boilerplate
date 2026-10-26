@@ -1,9 +1,3 @@
----
-paths:
-  - "app/core/agents.py"
-  - "app/**/agents/**"
----
-
 # Optional Pydantic AI / Bedrock
 
 Install the `ai` extra. Each feature's `agents/` owns its output model, static prompt,
@@ -12,7 +6,9 @@ in `app/core/agents.py`.
 
 - Create Agent/provider/model on first use via cached factories, never at module import.
   Caching is safe for prefork only when the parent hasn't constructed the client.
-- Standard AWS credential chain; configure BEDROCK_REGION and a model enabled for the account.
+- Standard AWS credential chain; configure BEDROCK_REGION and a BEDROCK_MODEL inference profile
+  enabled for the account. `BedrockConverseModel` uses the Converse API. Check the Bedrock model
+  docs before you change the model: some models are available only through InvokeModel or Mantle.
 - Keep system instructions static; pass dynamic input as the user prompt or explicit deps.
 - Set output_type, name, retries and usage_limits. Log token usage and best-effort cost after runs.
 - Return typed outputs. Validators normalize useful data and reject invalid domain results.

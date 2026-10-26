@@ -1,9 +1,3 @@
----
-paths:
-  - "app/**/*.py"
-  - "alembic/**/*.py"
----
-
 # Database
 
 PostgreSQL 18, SQLAlchemy 2 async API, psycopg3. Shared Base/engine/session factories live in

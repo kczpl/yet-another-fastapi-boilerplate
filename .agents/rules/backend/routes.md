@@ -1,12 +1,3 @@
----
-paths:
-  - "app/features/**/routes.py"
-  - "app/features/**/ai_routes.py"
-  - "app/features/**/dependencies.py"
-  - "app/features/**/schemas.py"
-  - "app/api/**/*.py"
----
-
 # HTTP layer
 
 Routes live beside their feature. Use explicit full paths without trailing slashes; apply

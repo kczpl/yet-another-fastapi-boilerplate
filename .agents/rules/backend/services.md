@@ -1,9 +1,3 @@
----
-paths:
-  - "app/features/**/services/**/*.py"
-  - "app/services/**/*.py"
----
-
 # Services
 
 One class per meaningful use case under `features/<domain>/services/`, with a `call()` method.

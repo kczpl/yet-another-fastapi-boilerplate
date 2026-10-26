@@ -10,6 +10,7 @@ os.environ["DATABASE_URL"] = (
 os.environ["ENVIRONMENT"] = "development"
 os.environ["SENTRY_DSN"] = ""
 os.environ["CORS_ORIGINS"] = '["http://localhost:3000"]'
+os.environ["RATE_LIMIT_PER_MINUTE"] = "0"  # tests/core/test_security.py enables it per test
 
 import pytest
 import pytest_asyncio
