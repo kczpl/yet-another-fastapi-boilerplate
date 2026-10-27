@@ -102,7 +102,8 @@ credentials/profile access explicitly using your deployment's mechanism. Model
 clients are created on first use, after worker fork; API import needs no AWS
 credentials. `BEDROCK_MODEL` defaults to `eu.anthropic.claude-sonnet-4-6`. Set an inference
 profile enabled in your account. The example uses the Bedrock Converse API, so check that the
-model supports Converse. Tests never call a live model.
+model supports Converse. `AI_REQUEST_TIMEOUT` (default 60 seconds) is the deadline for one
+model request. Tests never call a live model.
 
 Workers consume the declared `default` and `heavy` queues; unrouted tasks go to
 `default`, and misspelled queue names fail before publishing. Late acknowledgements

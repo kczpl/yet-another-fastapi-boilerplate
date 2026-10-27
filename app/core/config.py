@@ -55,6 +55,8 @@ class AIConfig(Config):
     AI_MAX_TOKENS: int = 8_192
     AI_REQUEST_LIMIT: int = 10
     AI_REQUEST_TOKEN_LIMIT: int = 200_000
+    # Deadline in seconds for one model request. The Celery soft time limit caps the whole task.
+    AI_REQUEST_TIMEOUT: float = Field(default=60, gt=0)
 
 
 ################################################################################

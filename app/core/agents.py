@@ -35,6 +35,7 @@ def get_model(model_name: str | None = None) -> BedrockConverseModel:
 def get_model_settings() -> BedrockModelSettings:
     return BedrockModelSettings(
         max_tokens=ai_config.AI_MAX_TOKENS,
+        request_timeout=ai_config.AI_REQUEST_TIMEOUT,
         bedrock_cache_instructions=True,
         bedrock_cache_tool_definitions=True,
     )
