@@ -10,6 +10,8 @@ its AsyncSession uses `join_transaction_mode="create_savepoint"`. Service commit
 savepoint; teardown rolls back the outer transaction. Never mock the DB or commit method.
 If code under test rolls back, commit factory setup first so its rows survive that savepoint.
 Rollback expires ORM attributes; save ids before the rollback when needed.
+To test `session_scope()`, monkeypatch `app.core.db.SessionLocal` with a savepoint session
+factory on `db_session.bind`. The worker runner test calls the real signal handlers and only reads.
 
 Mirror features under `tests/features/<domain>/`: route tests, repository tests and services/.
 Core pure tests should run without requesting DB fixtures. Factories in `tests/factories/`
