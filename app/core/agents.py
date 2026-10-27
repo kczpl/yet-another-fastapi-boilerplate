@@ -12,7 +12,7 @@ from app.core.logger import log
 
 # General pydantic-ai / Bedrock configuration shared by every agent. Individual
 # agents live next to the feature that uses them (e.g. app/features/items/agents/).
-# See .claude/rules/backend/ai-agents.md.
+# See .agents/rules/backend/ai-agents.md.
 
 
 @lru_cache(maxsize=1)
@@ -35,6 +35,7 @@ def get_model(model_name: str | None = None) -> BedrockConverseModel:
 def get_model_settings() -> BedrockModelSettings:
     return BedrockModelSettings(
         max_tokens=ai_config.AI_MAX_TOKENS,
+        request_timeout=ai_config.AI_REQUEST_TIMEOUT,
         bedrock_cache_instructions=True,
         bedrock_cache_tool_definitions=True,
     )

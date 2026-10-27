@@ -14,5 +14,5 @@ router = APIRouter(tags=["items"])
 )
 def summarize_item(item: ValidItem) -> dict:
     # Offload the LLM work to the `heavy` queue; the endpoint returns immediately.
-    enqueue_summarize_item(str(item.id))
+    enqueue_summarize_item(item.id)
     return {"message": MESSAGES["success"]}

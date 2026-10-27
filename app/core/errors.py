@@ -17,6 +17,8 @@ ERRORS = {
     "validation_error": "api.general.validation_error",
     "conflict": "api.general.conflict",
     "file_too_large": "api.general.file_too_large",
+    "rate_limit_exceeded": "api.general.rate_limit_exceeded",
+    "ip_blocked": "api.general.ip_blocked",
     ### Items (example feature) ###
     "item_not_found": "api.items.item_not_found",
 }

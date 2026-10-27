@@ -1,6 +1,7 @@
 import os
 from collections.abc import AsyncGenerator, Iterator
 from importlib.util import find_spec
+from pathlib import Path
 from unittest.mock import patch
 
 # Must be set before importing app.core.config (engine is built at import time).
@@ -10,6 +11,7 @@ os.environ["DATABASE_URL"] = (
 os.environ["ENVIRONMENT"] = "development"
 os.environ["SENTRY_DSN"] = ""
 os.environ["CORS_ORIGINS"] = '["http://localhost:3000"]'
+os.environ["RATE_LIMIT_PER_MINUTE"] = "0"  # tests/core/test_security.py enables it per test
 
 import pytest
 import pytest_asyncio
@@ -22,7 +24,14 @@ from app.core.db import get_db
 from app.main import api, app
 from tests.factories.base import BaseFactory
 
+if find_spec("pydantic_ai") is not None:
+    from pydantic_ai import models
+
+    # A real model request fails in tests. TestModel and FunctionModel still work.
+    models.ALLOW_MODEL_REQUESTS = False
+
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _factory_classes(cls: type[BaseFactory] = BaseFactory) -> Iterator[type[BaseFactory]]:
@@ -35,7 +44,7 @@ def _factory_classes(cls: type[BaseFactory] = BaseFactory) -> Iterator[type[Base
 
 @pytest.fixture(scope="session")
 def migrated_db():
-    command.upgrade(Config("alembic/alembic.ini"), "head")
+    command.upgrade(Config(str(PROJECT_ROOT / "alembic/alembic.ini")), "head")
 
 
 @pytest_asyncio.fixture(scope="session")

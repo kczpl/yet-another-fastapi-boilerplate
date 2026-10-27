@@ -1,21 +1,8 @@
-from dataclasses import dataclass
-
-from fastapi import Query
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class Pagination:
-    page: int
-    page_size: int
-
-
-def pagination_params(default_page_size: int = 10):
-    # Factory so endpoints keep their own default page_size — changing a default
-    # silently changes API behaviour for clients that omit the param.
-    def dependency(
-        page: int = Query(1, ge=1),
-        page_size: int = Query(default_page_size, ge=1, le=100),
-    ) -> Pagination:
-        return Pagination(page=page, page_size=page_size)
-
-    return dependency
+class Pagination(BaseModel):
+    # Use as `Annotated[Pagination, Query()]`. For another default page_size, subclass it:
+    # a changed default changes the API for clients that omit the parameter.
+    page: int = Field(1, ge=1)
+    page_size: int = Field(10, ge=1, le=100)

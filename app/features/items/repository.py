@@ -1,4 +1,5 @@
 import uuid
+from typing import TypedDict, Unpack
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +8,12 @@ from app.features.items.models import Item
 
 # Repository functions never commit — they flush to materialize IDs/defaults. The
 # transaction belongs to the caller (route service commits; Celery auto-commits).
+
+
+class ItemChanges(TypedDict, total=False):
+    name: str
+    description: str | None
+    summary: str | None
 
 
 async def create_item(db: AsyncSession, *, name: str, description: str | None = None) -> Item:
@@ -42,3 +49,15 @@ async def set_item_summary(db: AsyncSession, item: Item, summary: str) -> Item:
     item.summary = summary
     await db.flush()
     return item
+
+
+async def update_item(db: AsyncSession, item: Item, **changes: Unpack[ItemChanges]) -> Item:
+    for field, value in changes.items():
+        setattr(item, field, value)
+    await db.flush()
+    return item
+
+
+async def delete_item(db: AsyncSession, item: Item) -> None:
+    await db.delete(item)
+    await db.flush()

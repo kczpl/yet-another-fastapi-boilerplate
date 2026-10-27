@@ -1,9 +1,3 @@
----
-paths:
-  - "app/features/**/services/**/*.py"
-  - "app/services/**/*.py"
----
-
 # Services
 
 One class per meaningful use case under `features/<domain>/services/`, with a `call()` method.
@@ -22,3 +16,4 @@ related behavior needs grouping. Do not extract every line into its own method.
   introduce an outbox for that workflow; a direct `.delay()` cannot provide that guarantee.
 
 `CreateItemService`, `ListItemsService` and `SummarizeItemService` demonstrate these boundaries.
+`UpdateItemService` shows an invariant: a new description clears the stale summary.

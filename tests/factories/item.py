@@ -1,10 +1,10 @@
 from factory.declarations import Sequence
 
 from app.features.items.models import Item
-from tests.factories.base import BaseFactory, BaseMetaFactory
+from tests.factories.base import BaseFactory
 
 
-class ItemFactory(BaseFactory, metaclass=BaseMetaFactory[Item]):
+class ItemFactory(BaseFactory[Item]):
     # Only fields without a model default; id / status / timestamps come from the
     # model and are loaded back by BaseFactory.create() after the flush.
     class Meta:  # type: ignore[reportIncompatibleVariableOverride]
