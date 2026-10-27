@@ -1,6 +1,7 @@
 # Backend conventions
 
 - Python 3.14: standard-library `uuid.uuid7()`, modern type hints and named, typed results.
+  Use PEP 695 generics (`class APIResponse[T]`, `def run_async[T]`). Ruff enforces them.
 - Feature modules own their routes, dependencies, models, schemas, repository and services.
 - Prefer functions for stateless work. A small service class groups one use case and its session.
 - Keep short workflows inline. Extract a private helper only for a repeated or complex step.

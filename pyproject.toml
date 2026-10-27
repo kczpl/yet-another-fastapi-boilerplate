@@ -45,8 +45,6 @@ line-length = 120
 select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "ASYNC", "N", "T20", "S", "DTZ", "T10", "PT", "PIE", "RET"]
 ignore = [
     "E501",  # line-too-long — formatting handled by ruff format
-    "UP046", # keep Generic[T] base (Pydantic generic models); don't force PEP 695
-    "UP047", # keep classic generic function syntax
 ]
 
 [tool.ruff.lint.per-file-ignores]
