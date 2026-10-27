@@ -7,7 +7,8 @@ from pydantic import BaseModel, ConfigDict, StringConstraints
 
 class ItemCreate(BaseModel):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
-    description: str | None = None
+    # The summarizer sends the description to the model. The limit caps the input of one request.
+    description: Annotated[str, StringConstraints(max_length=10_000)] | None = None
 
 
 class ItemResponse(BaseModel):

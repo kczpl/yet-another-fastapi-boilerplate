@@ -24,6 +24,12 @@ class TestItemRoutes:
         assert body["error"] == "api.general.validation_error"
         assert body["data"]["details"][0]["field"] == "body.name"
 
+    async def test_create_item_with_too_long_description(self, client: AsyncClient):
+        resp = await client.post("/api/v1/items", json={"name": "Gadget", "description": "x" * 10_001})
+
+        assert resp.status_code == 422
+        assert resp.json()["data"]["details"][0]["field"] == "body.description"
+
     async def test_list_items_paginates(self, client: AsyncClient):
         for _ in range(3):
             await ItemFactory.create()
