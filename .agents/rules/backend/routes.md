@@ -6,9 +6,13 @@ Routes live beside their feature. Use explicit full paths without trailing slash
 Use async routes for async I/O. Sync-only operations such as Celery `.delay()` belong in a
 sync route (FastAPI's thread pool) or an explicit thread-pool call, never directly in async code.
 
-Pydantic validates request shape. Feature `dependencies.py` loads resources and checks HTTP
-identity/access. Reuse annotated dependencies such as `ValidItem`; pass the loaded object to
-services instead of fetching it again. Keep database queries in `repository.py`.
+Pydantic validates request shape. A PATCH schema types each field as `T | MISSING = MISSING`
+(`from pydantic import MISSING`). `model_dump()` leaves out the fields that the request does not
+send. Add `| None` only to a field that the client can clear.
+
+Feature `dependencies.py` loads resources and checks HTTP identity/access. Reuse annotated
+dependencies such as `ValidItem`; pass the loaded object to services instead of fetching it
+again. Keep database queries in `repository.py`.
 
 Routes construct services with the injected `AsyncDb` session. Services themselves take a plain
 `AsyncSession`, so they work in HTTP, workers and direct tests without FastAPI annotations.

@@ -17,7 +17,7 @@ app/
 │   ├── schemas.py           # Pydantic request/response models
 │   ├── models.py            # SQLAlchemy entities
 │   ├── repository.py        # Queries and persistence; flush, never commit
-│   ├── services/            # Use cases: create, list, cleanup, summarize
+│   ├── services/            # Use cases: create, list, update, delete, cleanup, summarize
 │   ├── ai_routes.py         # Enabled by installing the ai extra
 │   └── agents/              # Optional AI wrapper
 ├── services/base.py         # Shared AsyncSession constructor

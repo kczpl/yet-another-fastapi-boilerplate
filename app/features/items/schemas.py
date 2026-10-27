@@ -2,13 +2,22 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import MISSING, BaseModel, ConfigDict, StringConstraints
+
+ItemName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+# The summarizer sends the description to the model. The limit caps the input of one request.
+ItemDescription = Annotated[str, StringConstraints(max_length=10_000)]
 
 
 class ItemCreate(BaseModel):
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
-    # The summarizer sends the description to the model. The limit caps the input of one request.
-    description: Annotated[str, StringConstraints(max_length=10_000)] | None = None
+    name: ItemName
+    description: ItemDescription | None = None
+
+
+class ItemUpdate(BaseModel):
+    # MISSING marks a field that the request does not send. model_dump() leaves it out.
+    name: ItemName | MISSING = MISSING
+    description: ItemDescription | MISSING | None = MISSING
 
 
 class ItemResponse(BaseModel):
