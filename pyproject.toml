@@ -73,7 +73,10 @@ venvPath = "."
 venv = ".venv"
 exclude = ["**/node_modules", "**/__pycache__", "**/.*", "alembic/versions"]
 
-[tool.pytest.ini_options]
+[tool.pytest]
+strict = true
+# A new warning fails the suite. Ignore a third-party warning only with an exact filter.
+filterwarnings = ["error"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
