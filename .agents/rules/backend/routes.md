@@ -19,6 +19,7 @@ Routes construct services with the injected `AsyncDb` session. Services themselv
 Return domain objects under `{"data": result}` with optional `MESSAGES` keys. Response schemas
 use `from_attributes=True` for ORM entities. Load required relationships before serialization.
 
+Routes take `Annotated[Pagination, Query()]`, a FastAPI query parameter model.
 Pagination defaults: page=1, page_size=10, max page_size=100. Return items, page, page_size,
 total_count, total_pages. Preserve totals on empty out-of-range pages. Use a deterministic order
 with a unique tie-breaker. A count query is clearer than a window count that disappears on empty pages.
