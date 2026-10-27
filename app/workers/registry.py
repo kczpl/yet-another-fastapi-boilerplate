@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from app.core.logger import bind_context
 from app.workers.celery import celery
 from app.workers.queues import QUEUE_DEFAULT, QUEUE_HEAVY
@@ -14,7 +16,8 @@ def summarize_item_task(item_id: str) -> dict:
     from app.features.items.services.summarize import SummarizeItemService
 
     bind_context(item_id=item_id)
-    return run_service(SummarizeItemService, item_id)
+    # JSON task arguments carry the id as str. Parse it here, at the task boundary.
+    return run_service(SummarizeItemService, UUID(item_id))
 
 
 @celery.task(name="tasks.example_cleanup", queue=QUEUE_DEFAULT, time_limit=300, soft_time_limit=240, max_retries=0)

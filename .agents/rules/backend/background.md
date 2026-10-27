@@ -9,6 +9,8 @@ A single worker consuming both queues does not isolate latency; use separate con
 Tasks in `registry.py` are thin wrappers around `run_service()`. Import service classes inside
 task bodies to avoid import cycles and parent-process client initialization. Feature code uses
 typed helpers in `workers/enqueue.py`. Celery publishing is synchronous; don't block async routes.
+Task arguments are JSON values. The enqueue helper sends `str(item_id)`, and the task parses it
+with `UUID(item_id)`. Services take typed values and return a TypedDict.
 
 ## Lifecycle
 
