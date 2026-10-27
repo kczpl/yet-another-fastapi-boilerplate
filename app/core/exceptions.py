@@ -58,6 +58,7 @@ _HTTP_STATUS_ERRORS = {
     409: "conflict",
     413: "file_too_large",
     422: "validation_error",
+    429: "rate_limit_exceeded",
 }
 _VALIDATION_MESSAGES = {
     "missing": ERRORS["required_parameter_missing"],
@@ -65,7 +66,7 @@ _VALIDATION_MESSAGES = {
 }
 
 
-def _error_response(
+def error_response(
     status_code: int, error_key: str, data: dict, headers: Mapping[str, str] | None = None
 ) -> JSONResponse:
     # Wire format carries the i18n key (like MESSAGES); the short key stays in logs.
@@ -79,7 +80,7 @@ async def handle_api_exception(request: Request, exc: Exception) -> JSONResponse
     exc = cast(APIException, exc)
     logger = log.error if exc.status_code >= 500 else log.warning
     logger("api_error", error_key=exc.error_key, path=request.url.path, status=exc.status_code)
-    return _error_response(exc.status_code, exc.error_key, exc.kwargs)
+    return error_response(exc.status_code, exc.error_key, exc.kwargs)
 
 
 async def handle_http_exception(request: Request, exc: Exception) -> JSONResponse:
@@ -87,7 +88,7 @@ async def handle_http_exception(request: Request, exc: Exception) -> JSONRespons
     fallback = "server_error" if exc.status_code >= 500 else "bad_request"
     error_key = _HTTP_STATUS_ERRORS.get(exc.status_code, fallback)
     log.warning("http_error", detail=exc.detail, path=request.url.path, status=exc.status_code)
-    return _error_response(exc.status_code, error_key, {"detail": exc.detail}, headers=exc.headers)
+    return error_response(exc.status_code, error_key, {"detail": exc.detail}, headers=exc.headers)
 
 
 async def handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
@@ -101,12 +102,12 @@ async def handle_validation_error(request: Request, exc: Exception) -> JSONRespo
         for error in exc.errors()
     ]
     log.warning("validation_error", path=request.url.path, details=details)
-    return _error_response(422, "validation_error", {"details": details})
+    return error_response(422, "validation_error", {"details": details})
 
 
 async def handle_generic_exception(request: Request, exc: Exception) -> JSONResponse:
     log.error("unhandled_exception", exc_info=exc, path=request.url.path)
-    return _error_response(500, "server_error", {})
+    return error_response(500, "server_error", {})
 
 
 def setup_exception_handlers(app: FastAPI) -> None:

@@ -1,18 +1,16 @@
 import asyncio
 import contextvars
 from collections.abc import Coroutine
-from typing import Any, TypeVar
+from typing import Any
 
 from celery.signals import worker_process_init, worker_process_shutdown
 
 from app.core.db import engine, session_scope
 
-T = TypeVar("T")
-
 _runner: asyncio.Runner | None = None
 
 
-def run_async(coro: Coroutine[Any, Any, T]) -> T:
+def run_async[T](coro: Coroutine[Any, Any, T]) -> T:
     if _runner is None:
         coro.close()
         raise RuntimeError("async runner not initialized — is this running inside a Celery worker?")

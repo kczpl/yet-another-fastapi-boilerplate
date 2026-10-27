@@ -17,7 +17,7 @@ app/
 │   ├── schemas.py           # Pydantic request/response models
 │   ├── models.py            # SQLAlchemy entities
 │   ├── repository.py        # Queries and persistence; flush, never commit
-│   ├── services/            # Use cases: create, list, cleanup, summarize
+│   ├── services/            # Use cases: create, list, update, delete, cleanup, summarize
 │   ├── ai_routes.py         # Enabled by installing the ai extra
 │   └── agents/              # Optional AI wrapper
 ├── services/base.py         # Shared AsyncSession constructor
@@ -100,8 +100,10 @@ AWS credentials use the standard SDK chain: exported `AWS_PROFILE`, standard AWS
 credential variables (including session tokens), or an IAM role. For Docker, pass
 credentials/profile access explicitly using your deployment's mechanism. Model
 clients are created on first use, after worker fork; API import needs no AWS
-credentials. Configure `BEDROCK_MODEL` for an inference profile enabled in your
-account. Tests never call a live model.
+credentials. `BEDROCK_MODEL` defaults to `eu.anthropic.claude-sonnet-4-6`. Set an inference
+profile enabled in your account. The example uses the Bedrock Converse API, so check that the
+model supports Converse. `AI_REQUEST_TIMEOUT` (default 60 seconds) is the deadline for one
+model request. Tests never call a live model.
 
 Workers consume the declared `default` and `heavy` queues; unrouted tasks go to
 `default`, and misspelled queue names fail before publishing. Late acknowledgements
@@ -109,7 +111,9 @@ and requeueing on worker loss allow redelivery: tasks must be idempotent. Ordina
 failures/timeouts are acknowledged; add bounded retries for specific transient
 exceptions in each task. `max_retries` alone does not enable retries.
 
-Compose persists Redis to a volume with AOF, `appendfsync always` and `noeviction`.
+Compose runs Redis 8 and persists it to a volume with AOF, `appendfsync always` and
+`noeviction`. Redis 8 reads data files of older versions, but an older Redis cannot always
+read files that Redis 8 wrote. Back up an existing volume before the upgrade.
 Fsync before acknowledging writes trades throughput for stronger persistence.
 This is a single broker, with no high availability or guarantee against disk/node
 loss. Persistent messages do not provide exactly-once execution. See
@@ -183,11 +187,29 @@ The example CRUD routes are public. Add authentication for your product, with
 HTTP identity/access checks in dependencies and business invariants in services.
 CORS defaults to no origins; list deployed frontend origins explicitly.
 Docs and OpenAPI default to disabled outside development (`SHOW_DOCS` overrides).
+`/up` checks process liveness. It does not check the database or the broker.
 
-The app limits consumed request bodies to 10 MiB, including chunked requests.
-Set ingress body/time limits and rate limiting at your reverse proxy. Uvicorn
-should only trust forwarded headers from known proxy addresses. `/up` checks
-process liveness; it deliberately does not assert database or broker readiness.
+Small ASGI middleware classes in `app/core/security.py` replace a security package:
+
+| Setting or limit | Behavior |
+|---|---|
+| Request body: 10 MiB | Checks `Content-Length` and the bytes read, also for chunked bodies. 400 or 413. |
+| `RATE_LIMIT_PER_MINUTE` (default 1000, `0` disables) | Fixed window per client IP and API process. 429 with `Retry-After`. `/up` is exempt. |
+| `BLOCKED_IPS` (JSON list of addresses or CIDRs) | 403 for HTTP, close code 1008 for WebSocket. |
+| Security headers | HSTS, `nosniff`, `X-Frame-Options: DENY`, referrer, cross-origin and permissions policies on each response. |
+| Request log | One `http_request` event with the status, the duration and `X-Request-ID`. |
+
+The rate limit lives in process memory. N API processes allow N times the limit, and a
+restart clears the counts. Put strict, shared or per-route limits, WAF rules and ingress
+body/time limits at the reverse proxy or load balancer. The headers have no CSP, because a
+CSP blocks the CDN assets of `/docs`. Add one when the API serves no HTML.
+
+The middleware reads the client IP from the ASGI scope. Uvicorn takes it from
+`X-Forwarded-For` only for proxies in `FORWARDED_ALLOW_IPS` (default: loopback). Behind a
+proxy, set `FORWARDED_ALLOW_IPS` to the proxy addresses or network. If you do not, all clients
+share the proxy IP: one rate-limit count and one block decision for everybody. Never set
+`FORWARDED_ALLOW_IPS=*` when clients can reach Uvicorn directly, because they can then forge
+their IP.
 
 The AI example skips completed summaries on sequential redelivery. It does not
 promise exactly-once model calls under concurrent tasks or a crash between a model
@@ -195,4 +217,5 @@ response and commit. Add locking/idempotency or a transactional outbox when a re
 workflow needs those guarantees.
 
 Detailed review and implementation decisions: [docs/review.md](docs/review.md).
-Coding guidance: [CLAUDE.md](CLAUDE.md) and `.claude/rules/backend/`.
+Agent and coding guidance: [AGENTS.md](AGENTS.md) and [`.agents/`](.agents/README.md).
+Every coding tool reads the same rules; the repository has no tool-specific copies.

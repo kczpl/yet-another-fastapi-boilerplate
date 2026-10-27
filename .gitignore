@@ -29,3 +29,7 @@ celerybeat-schedule*
 
 # Local request scratch files
 scripts/requests/
+
+# Local agent settings. Shared agent guidance lives in AGENTS.md and .agents/.
+.claude/
+.codex/

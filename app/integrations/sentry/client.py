@@ -62,19 +62,14 @@ def init_sentry() -> None:
         dsn=api_config.SENTRY_DSN,
         environment=api_config.ENVIRONMENT,
         release=api_config.SENTRY_RELEASE or f"backend@{api_config.VERSION}",
-        sample_rate=1.0 if production else 0.5,
         traces_sample_rate=0.1 if production else 0.05,
         profiles_sample_rate=0.1 if production else 0.05,
-        max_breadcrumbs=100 if production else 50,
         attach_stacktrace=True,
         # local variables in tracebacks can leak request bodies, tokens, decrypted
         # values; keep them off in shared environments.
         include_local_variables=False,
-        include_source_context=True,
         send_default_pii=False,
-        max_request_body_size="medium",
         before_send=_scrub_event,
-        enable_backpressure_handling=True,
         integrations=[
             StarletteIntegration(transaction_style="endpoint", failed_request_status_codes=_SERVER_ERRORS),
             FastApiIntegration(transaction_style="endpoint", failed_request_status_codes=_SERVER_ERRORS),

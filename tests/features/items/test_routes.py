@@ -24,6 +24,12 @@ class TestItemRoutes:
         assert body["error"] == "api.general.validation_error"
         assert body["data"]["details"][0]["field"] == "body.name"
 
+    async def test_create_item_with_too_long_description(self, client: AsyncClient):
+        resp = await client.post("/api/v1/items", json={"name": "Gadget", "description": "x" * 10_001})
+
+        assert resp.status_code == 422
+        assert resp.json()["data"]["details"][0]["field"] == "body.description"
+
     async def test_list_items_paginates(self, client: AsyncClient):
         for _ in range(3):
             await ItemFactory.create()
@@ -54,6 +60,41 @@ class TestItemRoutes:
 
         assert resp.status_code == 404
         assert resp.json()["error"] == "api.items.item_not_found"
+
+    async def test_update_item_changes_only_sent_fields(self, client: AsyncClient):
+        item = await ItemFactory.create(name="Old", description="Kept")
+
+        resp = await client.patch(f"/api/v1/items/{item.id}", json={"name": " New "})
+
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["name"] == "New"
+        assert data["description"] == "Kept"
+
+    async def test_update_item_clears_description_with_null(self, client: AsyncClient):
+        item = await ItemFactory.create(description="Old")
+
+        resp = await client.patch(f"/api/v1/items/{item.id}", json={"description": None})
+
+        assert resp.status_code == 200
+        assert resp.json()["data"]["description"] is None
+
+    async def test_update_item_rejects_null_name(self, client: AsyncClient):
+        item = await ItemFactory.create()
+
+        resp = await client.patch(f"/api/v1/items/{item.id}", json={"name": None})
+
+        assert resp.status_code == 422
+        assert resp.json()["data"]["details"][0]["field"] == "body.name"
+
+    async def test_delete_item(self, client: AsyncClient):
+        item = await ItemFactory.create()
+
+        resp = await client.delete(f"/api/v1/items/{item.id}")
+
+        assert resp.status_code == 200
+        assert resp.json() == {"message": "api.general.deleted", "data": None}
+        assert (await client.get(f"/api/v1/items/{item.id}")).status_code == 404
 
     @pytest.mark.skipif(find_spec("pydantic_ai") is None, reason="requires the ai extra")
     async def test_summarize_enqueues_task(self, client: AsyncClient, mock_celery):

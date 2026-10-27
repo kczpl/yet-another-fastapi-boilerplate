@@ -9,7 +9,7 @@ from app.core.db import Base
 from app.utils.time import utc_now
 
 # Example model. Conventions (UUIDv7 PK, tz-aware timestamps, String+CheckConstraint
-# instead of ENUM, public schema) are documented in .claude/rules/backend/database.md.
+# instead of ENUM, public schema) are documented in .agents/rules/backend/database.md.
 
 VALID_ITEM_STATUSES = ("active", "archived")
 

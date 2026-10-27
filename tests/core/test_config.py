@@ -28,3 +28,13 @@ def test_docs_are_disabled_by_default_in_production():
 def test_visibility_timeout_must_exceed_task_limit(timeout: int):
     with pytest.raises(ValidationError, match="BROKER_VISIBILITY_TIMEOUT must exceed"):
         CeleryConfig(TASK_TIME_LIMIT=600, BROKER_VISIBILITY_TIMEOUT=timeout)
+
+
+def test_blocked_ips_accept_addresses_and_networks():
+    config = ApiConfig.model_validate({"BLOCKED_IPS": ["203.0.113.7", "198.51.100.0/24", "2001:db8::/32"]})
+    assert [str(network) for network in config.BLOCKED_IPS] == ["203.0.113.7/32", "198.51.100.0/24", "2001:db8::/32"]
+
+
+def test_negative_rate_limit_is_rejected():
+    with pytest.raises(ValidationError, match="RATE_LIMIT_PER_MINUTE"):
+        ApiConfig.model_validate({"RATE_LIMIT_PER_MINUTE": -1})

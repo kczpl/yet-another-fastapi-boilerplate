@@ -53,7 +53,8 @@ sam nie domykał architektury ani części przypadków brzegowych.
 - Jednomodułowy router nie potrzebuje osobnego katalogu. Usunięto pośredni serializer
   oraz nieużywany mechanizm wyliczania FK w factory.
 - Zachowano z PR #1 usunięcie `fastapi-guard`, scalenie modułów DB i nazwę `enqueue.py`.
-  Małe middleware obsługują potrzebne funkcje; polityki rate limiting/WAF konfiguruje ingress.
+  Małe middleware obsługują potrzebne funkcje (zob. „Odświeżenie templatki”); twarde limity
+  i WAF konfiguruje ingress.
 - Usunięto hipotetyczne wyjątki dużych uploadów oraz niestandardowe nazwy kluczy AWS.
 - Skrócono i ujednolicono instrukcje kodowania. Nie ma obowiązku rozbijania prostych
   operacji na prywatną metodę dla każdego kroku ani trzymania indeksów poza metadata.
@@ -136,6 +137,25 @@ Weryfikacja dodatkowego przeglądu:
 - W osobnym kontenerze workera zabito pierwszy proces prefork podczas zadania;
   to samo zadanie zostało dostarczone ponownie i zakończyło się w drugiej próbie.
   To test awarii procesów, bez symulowania awarii dysku lub całego hosta.
+
+## Odświeżenie templatki (październik 2026)
+
+Cel: mało paczek, aktualne wersje, jasne zasady dla agentów. Wzorce bezpieczeństwa i
+struktura `.agents` pochodzą z projektu numonis, uproszczone do potrzeb templatki.
+
+| Obszar | Zmiana i powód |
+|---|---|
+| Bezpieczeństwo HTTP | `SecurityMiddleware` w `app/core/security.py` zastępuje funkcje `fastapi-guard` bez nowej zależności: blokada adresów i sieci z `BLOCKED_IPS` (403, WebSocket 1008), limit `RATE_LIMIT_PER_MINUTE` na IP klienta (429 z `Retry-After`) i nagłówki bezpieczeństwa. Brak CSP i COEP, bo blokują zasoby CDN dla `/docs`. Pominięto przestarzałe `X-XSS-Protection` i `X-Download-Options`. |
+| Limit żądań | Stałe okno w pamięci procesu. N procesów API przepuszcza N × limit, a restart zeruje liczniki. To bezpiecznik aplikacji; twarde i współdzielone limity należą do proxy lub load balancera. Testy wyłączają limit i sprawdzają go z fałszywym zegarem. |
+| IP klienta | Aplikacja nie parsuje `X-Forwarded-For`. Uvicorn podmienia adres klienta tylko dla proxy z `FORWARDED_ALLOW_IPS`. Bez tego ustawienia wszyscy klienci za proxy dzielą jeden licznik i jedną decyzję blokady. |
+| Logowanie i kolejność ASGI | `LoggingMiddleware` loguje stałe zdarzenie `http_request` z polami i pomija `/up`. Kolejność: CORS → logging → security → FastAPI, więc odpowiedzi 403, 429 i 500 mają CORS, `X-Request-ID` i nagłówki bezpieczeństwa. Wspólne `error_response()` buduje kopertę błędu w handlerach i middleware. |
+| Zależności | Wszystkie paczki podbite; dolne granice w `pyproject.toml` równe wersjom z locka. Usunięto filtr ostrzeżeń pytest, bo nie jest już potrzebny. uv 0.13.5 w Dockerze i CI. Akcje GitHub przypięte do SHA, bo `setup-uv` nie publikuje już tagów major; checkout nie zapisuje tokena. Redis 8 w Compose. |
+| Sentry | Usunięto opcje równe domyślnym wartościom SDK. Staging wysyła teraz wszystkie błędy zamiast połowy; sampling traces i profili bez zmian. |
+| Bedrock | Domyślny model to `eu.anthropic.claude-sonnet-4-6`; Sonnet 4.5 jest wycofywany. `BedrockConverseModel` używa Converse API, a część nowszych modeli działa tylko przez InvokeModel lub Mantle, więc ich nie ustawiono domyślnie. Usunięto nieużywane `BEDROCK_MODEL_HAIKU`. `result.usage` jest teraz atrybutem w pydantic-ai. |
+| Zasady agentów | `CLAUDE.md` → `AGENTS.md`, `.claude/rules/backend/` → `.agents/rules/backend/`. Nowe `rules/core.md` i `rules/git.md`. Tabela obszarów w `AGENTS.md` wskazuje zasady do przeczytania przed edycją. Jedno źródło dla Codex, Cursor i Claude Code, bez hooków i adapterów; lokalne `.claude/` i `.codex/` są ignorowane przez git. |
+
+Świadomie bez zmian: Python 3.14 i PostgreSQL 18. Python 3.15 i PostgreSQL 19 to świeże
+wydania `.0`; templatka poczeka na pierwsze poprawki i pełne wsparcie paczek binarnych.
 
 ## Weryfikacja pierwotnego przeglądu (PR #1)
 
