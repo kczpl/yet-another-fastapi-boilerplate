@@ -20,6 +20,10 @@ in `app/core/agents.py`.
 - Put tools/validators in separate modules only when the agent grows enough to benefit, and
   explicitly register them in its factory; no mandatory side-effect barrel package.
 - LLM-bound background work uses the heavy queue. No live LLM calls in normal tests or CI.
+- Commit the read transaction before `agent.run()`. Write the output in a new transaction and
+  check again that the input did not change (`SummarizeItemService`).
+- For a batch of model calls, limit the concurrency with a semaphore and use
+  `gather(return_exceptions=True)`, so one failure does not cancel the batch.
 
 Tests validate output models and patch the async wrapper in service tests. Agent tests patch
 `get_model` to return a `TestModel` and clear the cached agent. Do not build the real Bedrock

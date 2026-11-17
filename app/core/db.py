@@ -33,6 +33,13 @@ def to_psycopg_url(url: str) -> str:
     return url
 
 
+def connect_args(idle_in_transaction_timeout: int) -> dict[str, str]:
+    # A transaction left open across a slow call then fails fast, also in development.
+    if idle_in_transaction_timeout == 0:
+        return {}
+    return {"options": f"-c idle_in_transaction_session_timeout={idle_in_transaction_timeout * 1000}"}
+
+
 engine = create_async_engine(
     to_psycopg_url(database_config.DATABASE_URL),
     pool_pre_ping=True,
@@ -40,6 +47,7 @@ engine = create_async_engine(
     max_overflow=database_config.POOL_MAX_OVERFLOW,
     pool_timeout=database_config.POOL_TIMEOUT,
     pool_recycle=database_config.POOL_RECYCLE,
+    connect_args=connect_args(database_config.IDLE_IN_TRANSACTION_TIMEOUT),
 )
 
 SessionLocal = async_sessionmaker(engine, autoflush=False, expire_on_commit=False)

@@ -25,6 +25,11 @@ worker services use the runner's `session_scope()`. Never add a commit flag to r
 Load relationships explicitly to avoid N+1 and MissingGreenlet errors. Never share AsyncSession
 across concurrent tasks; each concurrent unit of work needs its own session.
 
+An open transaction holds a pool connection. Commit before a slow call (LLM, HTTP, S3), then
+write in a new short transaction. A slow provider otherwise empties the pool of the process.
+`IDLE_IN_TRANSACTION_TIMEOUT` (default 60 s) makes PostgreSQL end such a session, also in
+development. Behind PgBouncer, set it to 0 and configure the timeout on the database role.
+
 Paged queries use stable ordering and a separate count so empty pages retain totals. Two queries
 at READ COMMITTED may observe concurrent writes; choose stronger snapshot semantics only when
 product requirements demand them.

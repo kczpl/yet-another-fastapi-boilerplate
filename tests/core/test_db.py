@@ -1,9 +1,9 @@
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import db
-from app.core.db import session_scope, to_psycopg_url
+from app.core.db import connect_args, engine, session_scope, to_psycopg_url
 from app.features.items import repository
 from app.features.items.models import Item
 
@@ -18,6 +18,21 @@ from app.features.items.models import Item
 )
 def test_to_psycopg_url(url: str, expected: str):
     assert to_psycopg_url(url) == expected
+
+
+async def test_app_engine_ends_idle_transactions():
+    # The suite uses its own engine; this checks the timeout on the application engine.
+    try:
+        async with engine.connect() as connection:
+            assert await connection.scalar(text("SHOW idle_in_transaction_session_timeout")) == "1min"
+    finally:
+        # No pooled connection may outlive the test event loop.
+        await engine.dispose()
+
+
+def test_zero_idle_timeout_sends_no_startup_option():
+    # PgBouncer rejects an unknown startup option, so 0 must remove it.
+    assert connect_args(0) == {}
 
 
 @pytest.fixture

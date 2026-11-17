@@ -44,6 +44,9 @@ class DatabaseConfig(Config):
     POOL_MAX_OVERFLOW: int = 2
     POOL_TIMEOUT: int = 30
     POOL_RECYCLE: int = 1800
+    # PostgreSQL ends a session that idles in a transaction longer than this (seconds).
+    # 0 disables it. PgBouncer rejects the startup option; set the timeout on the role there.
+    IDLE_IN_TRANSACTION_TIMEOUT: int = Field(default=60, ge=0)
 
 
 class AIConfig(Config):

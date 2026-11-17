@@ -11,9 +11,14 @@ related behavior needs grouping. Do not extract every line into its own method.
 - Return domain entities or typed results, without API envelopes or Pydantic response serialization.
 - Route-facing write services commit at the end of their use case. Repositories only flush.
 - Worker services leave commit/rollback to `session_scope()` through `run_service()`.
+  Exception: a service commits early to end a read transaction before a slow call.
+- Never hold a transaction open across a slow call (LLM, HTTP, S3, email). Read, commit, make
+  the call, then write in a new short transaction. Lock the row and check the state again.
 - Compose related writes under one transaction owner; don't nest committing services.
 - Queue only after the relevant data is committed. If commit and publish must be atomic,
   introduce an outbox for that workflow; a direct `.delay()` cannot provide that guarantee.
 
 `CreateItemService`, `ListItemsService` and `SummarizeItemService` demonstrate these boundaries.
 `UpdateItemService` shows an invariant: a new description clears the stale summary.
+`SummarizeItemService` shows the slow call: it commits before the model call and writes the
+result only when the item did not change.
