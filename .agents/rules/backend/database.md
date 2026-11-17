@@ -1,3 +1,13 @@
+---
+paths:
+  - "app/features/*/services/**/*.py"
+  - "app/features/*/models.py"
+  - "app/features/*/repository.py"
+  - "app/models.py"
+  - "app/core/db.py"
+  - "alembic/**"
+---
+
 # Database
 
 PostgreSQL 18, SQLAlchemy 2 async API, psycopg3. Shared Base/engine/session factories live in

@@ -10,19 +10,19 @@ optional. UUIDv7 comes from the standard library: `from uuid import uuid7`.
 `.claude/` or `.codex/`. See [.agents/README.md](.agents/README.md) for the tool support.
 
 1. At session start, read `.agents/rules/core.md` and `.agents/rules/git.md`.
-2. Before you edit a file, find its area below. Read each listed rule that is not in context.
-3. After compaction, read the rules for the next edit again.
+2. Before you edit, run `just rules <file> ...` with each file that you will change, also new
+   files. For a test, also give the file under test. Read each listed rule that is not in
+   context.
+3. Read a reference below only when its subject affects the change.
+4. After compaction, run `just rules` again for the next edit.
 
-| Area | Rules in `.agents/rules/backend/` |
-|---|---|
-| `app/core/`, `app/main.py`, `app/api/` | `core.md` |
-| `app/features/*/routes.py`, `dependencies.py`, `schemas.py` | `core.md`, `routes.md` |
-| `app/features/*/services/` | `core.md`, `services.md`, `database.md` |
-| `app/features/*/models.py`, `repository.py`, `app/models.py`, `app/core/db.py`, `alembic/` | `core.md`, `database.md` |
-| `app/workers/` | `core.md`, `background.md`, `integrations.md` |
-| `app/integrations/` | `core.md`, `integrations.md` |
-| `app/core/agents.py`, `app/features/*/agents/` | `core.md`, `ai-agents.md` |
-| `tests/` | `testing.md` and the rules of the code under test |
+The `paths:` frontmatter of each scoped rule is the only map from files to rules. `just rules`
+without files prints the whole map.
+
+## References
+
+- Authentication, roles or tenants: `.agents/references/auth-and-tenancy.md`.
+- Worker time limits, the broker, Redis persistence or beat: `.agents/references/workers.md`.
 
 ## Layout
 
@@ -34,10 +34,13 @@ for Alembic. Do not create a second central tree of repositories or services.
 Routes own HTTP and the response envelope. Services take an `AsyncSession`, call repository
 functions and return entities or typed data. Repositories flush but never commit. A route-facing
 service commits once per use case. A worker service relies on `session_scope()` in the runner.
-Do not nest transaction owners.
+Do not nest transaction owners. Commit before a slow call (LLM, HTTP, S3).
 
 `app.main.api` is the FastAPI object for dependency overrides and OpenAPI. `app.main.app` is the
 ASGI entry point. It wraps `api` with CORS, request logging and `SecurityMiddleware`.
+
+`tests/architecture/` enforces the layer rules. When one of its tests fails, fix the code. Do
+not add an allowlist.
 
 ## Commands
 
@@ -46,6 +49,7 @@ ASGI entry point. It wraps `api` with CORS, request logging and `SecurityMiddlew
 - `just ruff` formats and fixes. `just ci` runs `lint`, `types`, `complexity` and `test`.
 - `just test` starts PostgreSQL 18 in Docker. Tests apply the migrations and never mock the DB.
 - `just makemigration "description"` and `just migrate` use the settings from env and `.env`.
+- `just agents-check` checks the agent guidance only. `just test` also runs it.
 
 ## Safety
 

@@ -1,3 +1,10 @@
+---
+paths:
+  - "app/core/agents.py"
+  - "app/features/*/agents/**/*.py"
+  - "tests/features/*/agents/**/*.py"
+---
+
 # Optional Pydantic AI / Bedrock
 
 Install the `ai` extra. Each feature's `agents/` owns its output model, static prompt,

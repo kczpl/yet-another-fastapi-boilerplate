@@ -1,3 +1,9 @@
+---
+paths:
+  - "app/**/*.py"
+  - "alembic/**/*.py"
+---
+
 # Backend conventions
 
 - Python 3.14: standard-library `uuid.uuid7()`, modern type hints and named, typed results.

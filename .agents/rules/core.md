@@ -55,5 +55,5 @@ Do not rely on memory. Idioms that the codebase already uses need no lookup.
 
 Before a PR, update the docs in the same branch when a change affects the API contract, the
 configuration, the local setup, the deployment or the agent guidance. The targets are
-`README.md`, `.env.example`, `AGENTS.md` and `.agents/rules/`. If no docs change is necessary,
-say why in the PR.
+`README.md`, `.env.example`, `AGENTS.md`, `.agents/rules/` and `.agents/references/`. If no
+docs change is necessary, say why in the PR.

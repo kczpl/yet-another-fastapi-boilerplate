@@ -111,27 +111,13 @@ and requeueing on worker loss allow redelivery: tasks must be idempotent. Ordina
 failures/timeouts are acknowledged; add bounded retries for specific transient
 exceptions in each task. `max_retries` alone does not enable retries.
 
-Compose runs Redis 8 and persists it to a volume with AOF, `appendfsync always` and
-`noeviction`. Redis 8 reads data files of older versions, but an older Redis cannot always
-read files that Redis 8 wrote. Back up an existing volume before the upgrade.
-Fsync before acknowledging writes trades throughput for stronger persistence.
-This is a single broker, with no high availability or guarantee against disk/node
-loss. Persistent messages do not provide exactly-once execution. See
-[Redis persistence](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/).
-When upgrading an **existing RDB-only Redis volume**, back it up and enable AOF
-online (`CONFIG SET appendonly yes`); wait for successful AOF rewrite before
-restarting with this Compose configuration. Restarting with AOF enabled without
-first converting the existing data can lose it.
-
-`BROKER_VISIBILITY_TIMEOUT` defaults to 3600 seconds and must exceed the longest
-task's hard limit plus any ETA/countdown. Startup validates it against the global
-`TASK_TIME_LIMIT` (600 seconds); check task-specific overrides yourself. Whole-worker
-loss can delay redelivery until this timeout. Avoid long ETA reservations in Redis.
-Keep one beat instance per deployment; Compose persists its schedule in
-`celery_beat_data`. Beat is not a durable job ledger or a missed-run catch-up service.
-Workers receive SIGTERM directly and get 11 minutes to finish; adjust
-`WORKER_STOP_GRACE_PERIOD` when increasing task limits. Restart workers after code
-changes (`docker compose restart workers`); API hot reload remains enabled.
+Compose runs Redis 8 with a volume, AOF, `appendfsync always` and `noeviction`.
+`BROKER_VISIBILITY_TIMEOUT` (default 3600 s) must exceed the longest task's hard limit
+plus any ETA. Keep one beat instance per deployment. Workers get 11 minutes to finish on
+SIGTERM (`WORKER_STOP_GRACE_PERIOD`). Restart workers after code changes
+(`docker compose restart workers`); API hot reload remains enabled. Read
+[the workers reference](.agents/references/workers.md) before you change these settings or
+upgrade an existing Redis volume.
 
 ## Migrations
 

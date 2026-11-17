@@ -1,3 +1,8 @@
+---
+paths:
+  - "tests/**"
+---
+
 # Testing
 
 Use pytest + pytest-asyncio in auto mode. Tests and async fixtures use the same session loop,

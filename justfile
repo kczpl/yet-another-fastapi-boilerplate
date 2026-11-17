@@ -44,6 +44,14 @@ test *flags="":
 
 ci: lint types complexity test
 
+# Print the scoped rules for the files you will change. Without files, print the whole map.
+rules *paths:
+  @uv run --no-sync python .agents/guidance.py {{ if paths == "" { "--index" } else { "--paths " + paths } }}
+
+# Check the agent guidance: rules, links, repository paths and recipes. `just test` also runs it.
+agents-check:
+  uv run --no-sync python .agents/guidance.py --check
+
 # Apply migrations
 migrate:
   uv run --no-sync alembic -c alembic/alembic.ini upgrade head
