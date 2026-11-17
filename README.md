@@ -42,18 +42,26 @@ Shared infrastructure should not grow until there is a concrete second use case.
 
 ## Quickstart
 
-Install [uv](https://docs.astral.sh/uv/) and [just](https://just.systems/).
+Install [uv](https://docs.astral.sh/uv/), [just](https://just.systems/) and Docker.
 
 ```bash
-cp .env.example .env
-uv sync --locked                    # core + development tools; Python from .python-version
-just compose                        # API + one migration job + PostgreSQL
+just setup                          # all modules, .env and the ports of this checkout
+just up                             # API + one migration job + PostgreSQL, in the background
+just seed                           # three demo items
+just urls                           # the addresses of this checkout
 ```
 
-API: http://localhost:8000 · docs: `/docs` · liveness: `/up`.
+`just up` builds the image, starts the stack in the background and waits until the API is
+healthy. `just logs api` prints recent logs and stops; `just down` stops the stack.
 The `postgres-test` service only starts when explicitly requested. Redis, workers
-and beat use the `workers` Compose profile. API startup waits for migrations;
-worker startup waits for both migrations and Redis.
+and beat use the `workers` Compose profile (`COMPOSE_PROFILES=workers just up`). API
+startup waits for migrations; worker startup waits for both migrations and Redis.
+
+Each checkout and each git worktree gets its own slot from `just setup`: a Compose project
+name and ports base + N×10 (API 8000, PostgreSQL 5432, test PostgreSQL 5433, Redis 6379).
+Parallel agents in worktrees therefore do not share containers or a test database. A slot
+also skips ports that another project on the machine holds. Read the ports with `just urls`.
+Before you remove a worktree, run `just down -v` in it.
 
 To run the API on the host:
 
@@ -64,8 +72,9 @@ just app
 ```
 
 `.env.example` uses localhost. Compose overrides database/broker hosts for
-containers, so switching between host and Docker requires no edits. If you change
-host port mappings, update the corresponding URLs in `.env` as well.
+containers, so switching between host and Docker requires no edits. `just setup` writes the
+slot ports into the localhost URLs of `.env`. Keep JSON values in single quotes: `just`
+removes the double quotes of an unquoted value.
 
 ## Optional workers and AI
 

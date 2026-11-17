@@ -2,6 +2,7 @@
 paths:
   - "app/**/*.py"
   - "alembic/**/*.py"
+  - "scripts/**/*.py"
 ---
 
 # Backend conventions

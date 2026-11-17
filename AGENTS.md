@@ -21,6 +21,7 @@ without files prints the whole map.
 
 ## References
 
+- Run, call or test the app locally, also in a worktree: `.agents/references/local-development.md`.
 - Authentication, roles or tenants: `.agents/references/auth-and-tenancy.md`.
 - Worker time limits, the broker, Redis persistence or beat: `.agents/references/workers.md`.
 
@@ -44,8 +45,12 @@ not add an allowlist.
 
 ## Commands
 
-- `uv sync --locked --all-extras` installs all modules. `uv sync --locked` installs only the core.
-- `just app`, `just workers` and `just cron` run the selected environment without a resync.
+- `just setup` runs first in each checkout and each worktree. It installs all modules and gives
+  the checkout its own ports. Never assume port 8000; read `just urls`.
+- `just up` starts the stack in the background and waits until it is healthy. `just logs api`
+  prints recent logs and stops. `just seed` loads demo data. `just down` stops the stack.
+- `uv sync --locked` installs only the core. `just app`, `just workers` and `just cron` run the
+  installed environment on the host without a resync.
 - `just ruff` formats and fixes. `just ci` runs `lint`, `types`, `complexity` and `test`.
 - `just test` starts PostgreSQL 18 in Docker. Tests apply the migrations and never mock the DB.
 - `just makemigration "description"` and `just migrate` use the settings from env and `.env`.
