@@ -16,7 +16,7 @@ related behavior needs grouping. Do not extract every line into its own method.
   the call, then write in a new short transaction. Lock the row and check the state again.
 - Compose related writes under one transaction owner; don't nest committing services.
 - Queue only after the relevant data is committed. If commit and publish must be atomic,
-  introduce an outbox for that workflow; a direct `.delay()` cannot provide that guarantee.
+  introduce an outbox for that workflow; an enqueue helper cannot provide that guarantee.
 
 `CreateItemService`, `ListItemsService` and `SummarizeItemService` demonstrate these boundaries.
 `UpdateItemService` shows an invariant: a new description clears the stale summary.

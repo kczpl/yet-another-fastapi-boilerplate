@@ -3,8 +3,8 @@
 Routes live beside their feature. Use explicit full paths without trailing slashes; apply
 `/api/v1` once in `app/api/__init__.py`. Declare response_model and status_code.
 
-Use async routes for async I/O. Sync-only operations such as Celery `.delay()` belong in a
-sync route (FastAPI's thread pool) or an explicit thread-pool call, never directly in async code.
+Use async routes. Never call blocking code directly in them. A route enqueues work through a
+service that commits and then awaits an async `enqueue_*` helper (`RequestSummaryService`).
 
 Pydantic validates request shape. A PATCH schema types each field as `T | MISSING = MISSING`
 (`from pydantic import MISSING`). `model_dump()` leaves out the fields that the request does not

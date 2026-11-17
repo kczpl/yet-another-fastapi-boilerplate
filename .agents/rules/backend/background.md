@@ -6,11 +6,18 @@ Queue constants live in `workers/queues.py`: default for short work, heavy for l
 Both queues are declared durable; unrouted tasks go to default and unknown queues are rejected.
 A single worker consuming both queues does not isolate latency; use separate consumers when needed.
 
-Tasks in `registry.py` are thin wrappers around `run_service()`. Import service classes inside
-task bodies to avoid import cycles and parent-process client initialization. Feature code uses
-typed helpers in `workers/enqueue.py`. Celery publishing is synchronous; don't block async routes.
+Tasks in `registry.py` are thin wrappers around `run_service()`. Declare them with
+`@celery_task(...)`, never with a raw `@celery.task`. Import service classes inside task bodies
+to avoid import cycles and parent-process client initialization.
+
+Feature code awaits the async `enqueue_*` helpers of `workers/enqueue.py` after the commit.
+A Celery publish blocks, so the helpers publish in their own thread pool. Tests reject
+`.delay()` and `.apply_async()` outside `app/workers/`.
 Task arguments are JSON values. The enqueue helper sends `str(item_id)`, and the task parses it
 with `UUID(item_id)`. Services take typed values and return a TypedDict.
+
+Each task sets `recovered_by` to the beat task that finds its lost work. A cron names itself.
+`recovered_by=None` needs a reason in `TASKS_WITHOUT_RECOVERY`. A test checks both.
 
 ## Lifecycle
 
@@ -39,6 +46,9 @@ Late ACKs mean possible redelivery. The summary example skips already-completed 
 sequential redelivery, but concurrent tasks or a crash after an external call can repeat cost.
 Do not call that exactly-once delivery. Use vendor idempotency keys and task-specific locking
 or an outbox when required. A Redis marker written after sending does not close the crash window.
+Idempotency converges on entity state, a unique constraint or a row lock. Do not deduplicate on
+the Celery task_id: a retry reuses it. Never wait for the result of another task in a task; use
+one task or a chain.
 
 Beat has an example daily cleanup and per-queue heartbeat tasks. Keep one beat scheduler per
 deployment. Sentry monitors these only when its DSN is configured. Tasks do not persist results;
