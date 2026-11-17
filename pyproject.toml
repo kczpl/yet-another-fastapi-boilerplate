@@ -67,6 +67,8 @@ max-complexity-allowed = 10
 [tool.pyright]
 pythonVersion = "3.14"
 typeCheckingMode = "standard"
+# A stale ignore hides a place where the check no longer guards anything.
+reportUnnecessaryTypeIgnoreComment = "error"
 venvPath = "."
 venv = ".venv"
 exclude = ["**/node_modules", "**/__pycache__", "**/.*", "alembic/versions"]

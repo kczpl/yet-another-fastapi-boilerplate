@@ -13,6 +13,35 @@ Rollback expires ORM attributes; save ids before the rollback when needed.
 To test `session_scope()`, monkeypatch `app.core.db.SessionLocal` with a savepoint session
 factory on `db_session.bind`. The worker runner test calls the real signal handlers and only reads.
 
+## Test value
+
+A test must fail on a plausible regression of a business rule or of a visible behavior. Name
+that regression before you write the test.
+
+- Search for tests of the same behavior first. Extend or replace them; do not add a copy.
+- Test a behavior once, at the cheapest layer: pure logic without the DB, a service with
+  `db_session`, a route only for the status, the validation and the envelope.
+- Assert the outcome: a return value, stored state, an error key or a response. Assert a mock
+  call only when the call is the contract (a publish, an external request).
+- Build the data so that only the branch under test gives the result. Use exact matchers.
+- A check for absence (no row, no call) also asserts a positive result.
+- Use fixed data and a fixed clock. Never depend on test order, random values or real waits.
+- Do not test a library, a framework default, a constant or code without a caller.
+
+Prove that each new test can fail: break the code under test (remove the guard, flip the
+condition, move the boundary by one), run the test and see it fail. Then restore the code.
+A flaky test is a defect. Fix the cause; do not add retries or longer waits.
+
+## Architecture tests
+
+`tests/architecture/` reads the source or the model metadata. It enforces transaction
+ownership, the import direction, the enqueue helpers, the model conventions, the public route
+list and the log fields. `tests/migrations/test_heads.py` keeps one Alembic head. Fix a new
+offender; do not add an allowlist. A new scan gets a self-test with bad input, so that it
+cannot pass because it matches nothing.
+
+## Layout and fixtures
+
 Mirror features under `tests/features/<domain>/`: route tests, repository tests and services/.
 Core pure tests should run without requesting DB fixtures. Factories in `tests/factories/`
 subclass `BaseFactory[Model]` and build minimal valid rows. `await Factory.create()` returns the
