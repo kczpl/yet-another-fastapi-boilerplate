@@ -25,7 +25,9 @@ in `app/models.py` for Alembic; avoid automatic import discovery.
   Composite indexes/constraints include all participating column names, joined with underscores.
 - Match server defaults, constraints and indexes between models and migrations so `alembic check`
   stays clean. Declare indexes used by real queries in metadata too; don't hide them from autogenerate.
-- Add indexes for actual query patterns; avoid speculative indexing.
+- Add indexes for actual query patterns; avoid speculative indexing. Index each foreign key
+  column: PostgreSQL does not do it. Use a partial index for a column with few values
+  (`postgresql_where=text("status = 'active'")`), not a plain index on that column.
 - Foreign keys specify appropriate ondelete behavior. Bind SQL parameters; never interpolate input.
 
 ## Transactions and queries
@@ -44,6 +46,16 @@ Paged queries use stable ordering and a separate count so empty pages retain tot
 at READ COMMITTED may observe concurrent writes; choose stronger snapshot semantics only when
 product requirements demand them.
 
+Concurrent writers:
+
+- For read-modify-write on a shared row (a counter, a balance, a status change), lock the row
+  with `with_for_update()` (`get_item_for_update`) or write with `on_conflict_do_update()`.
+- Do not check and then insert. Insert and catch `IntegrityError` of the unique constraint.
+- Lock rows in the same order in each use case, so two transactions cannot deadlock.
+
+For user search, use `column.icontains(value, autoescape=True)` or `istartswith(...)`. Never
+build `ilike(f"%{value}%")`: `%` and `_` in the input then act as wildcards.
+
 ## Migrations
 
 `just makemigration "description"` generates revisions; post-write Ruff hooks format them.
@@ -57,5 +69,21 @@ drop_table migration; review all generated operations, including destructive col
 
 Tests create schemas by applying migrations. CI runs upgrade → check → downgrade → upgrade.
 Compose runs one migration service before API/workers; images do not migrate on every startup.
-Never run production migrations yourself. For rolling deployments, use expand/migrate/contract
-changes so old and new replicas can coexist.
+Never run production migrations yourself. `tests/migrations/test_heads.py` keeps one head; after
+a rebase, set `down_revision` to the new head (`git.md`).
+
+A rolling deployment runs old and new code on the new schema at the same time. Add freely;
+remove, narrow or rename only after the old code stops using it (expand, migrate, contract).
+
+| Operation | Safe in one deployment |
+|---|---|
+| Add a nullable column, or a column with `server_default` | Yes |
+| Create a table; create an index (`CONCURRENTLY` on a large table) | Yes |
+| Widen a type (`String(50)` to `String(255)`) | Yes |
+| Drop a column or a table | Only when no running code uses it |
+| Rename a column or a table | No: add, backfill, switch the code, then drop |
+| Set `NOT NULL` on an existing column | No: add a default, backfill, then alter |
+| Narrow or change a type | No: add a new column, copy the data, then drop the old one |
+
+`CREATE INDEX CONCURRENTLY` cannot run in a transaction. Call
+`op.create_index(..., postgresql_concurrently=True)` in `with op.get_context().autocommit_block():`.

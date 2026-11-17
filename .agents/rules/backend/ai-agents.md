@@ -15,7 +15,8 @@ in `app/core/agents.py`.
   Caching is safe for prefork only when the parent hasn't constructed the client.
 - Standard AWS credential chain; configure BEDROCK_REGION and a BEDROCK_MODEL inference profile
   enabled for the account. `BedrockConverseModel` uses the Converse API. Check the Bedrock model
-  docs before you change the model: some models are available only through InvokeModel or Mantle.
+  docs before you change the model. The default EU profile of Sonnet 5.5 supports Converse on
+  `bedrock-runtime`; the `bedrock-mantle` endpoint does not support Converse.
 - Keep system instructions static; pass dynamic input as the user prompt or explicit deps.
 - Set output_type, name, retries and usage_limits. Log token usage and best-effort cost after runs.
 - `get_model_settings()` sets `request_timeout` from `AI_REQUEST_TIMEOUT`. This deadline covers one

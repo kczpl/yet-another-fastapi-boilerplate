@@ -109,7 +109,7 @@ AWS credentials use the standard SDK chain: exported `AWS_PROFILE`, standard AWS
 credential variables (including session tokens), or an IAM role. For Docker, pass
 credentials/profile access explicitly using your deployment's mechanism. Model
 clients are created on first use, after worker fork; API import needs no AWS
-credentials. `BEDROCK_MODEL` defaults to `eu.anthropic.claude-sonnet-4-6`. Set an inference
+credentials. `BEDROCK_MODEL` defaults to `eu.anthropic.claude-sonnet-5-5`. Set an inference
 profile enabled in your account. The example uses the Bedrock Converse API, so check that the
 model supports Converse. `AI_REQUEST_TIMEOUT` (default 60 seconds) is the deadline for one
 model request. Tests never call a live model.
@@ -145,13 +145,15 @@ and index names come from shared metadata; composite names include all columns.
 ## Quality and tests
 
 ```bash
-uv sync --locked --all-extras
+just setup                          # all extras, .env and the ports of this checkout
 just lint                           # non-mutating Ruff format/lint checks
 just ruff                           # format and autofix
 just types                          # Pyright
 just complexity                     # complexipy: cognitive complexity <= 10/function
 just test                           # waits for PostgreSQL 18, applies migrations, tests
 just ci                             # all local checks
+just agents-check                   # agent guidance only (just test also runs it)
+just audit                          # known vulnerabilities in uv.lock (network; not in ci)
 just makemigration "create widgets table"
 ```
 
@@ -163,6 +165,13 @@ modules in the AI variant.
 Tests use migrated PostgreSQL schemas and rolled-back outer transactions with
 session savepoints. Tests and async fixtures share one event loop. Factories
 supply test data; external model calls and Celery publishing are mocked.
+
+`tests/architecture/` reads the source and the model metadata and enforces the layer
+rules: repositories never commit, `app/core` and `app/utils` import no upper layer, only
+the `enqueue_*` helpers publish tasks, models follow the database conventions, each
+route authenticates or is listed as public, and logs carry no personal data.
+`tests/migrations/test_heads.py` keeps one Alembic head. Pyright also reports a
+`# type: ignore` that is not necessary.
 
 Ruff also checks security patterns (`S`), timezone mistakes (`DTZ`), debugger calls
 (`T10`), pytest conventions (`PT`), and redundant code (`PIE`, `RET`). Exceptions

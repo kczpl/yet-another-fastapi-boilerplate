@@ -67,6 +67,15 @@ X-Forwarded-For in the app.
 `LoggingMiddleware` clears and binds the log context for each request, propagates X-Request-ID
 and logs one `http_request` event. It skips `/up`. Use static event names and put the values in
 fields. Structlog writes JSON outside development. Do not log secrets, request bodies or prompts.
+Log ids and counts, never personal data (email addresses, phone numbers, names, user text).
+`tests/architecture/test_log_fields.py` rejects the common field names in `log.*` and
+`bind_context` calls.
+
+## Time
+
+Use `utc_now()` for timestamps. Use `business_today()` for the calendar day of the business:
+servers run in UTC, so a UTC date is the wrong day near midnight. `BUSINESS_TIMEZONE` sets the
+zone. Ruff `DTZ` rejects `datetime.now()` without a zone and `date.today()`.
 
 ## Settings
 
