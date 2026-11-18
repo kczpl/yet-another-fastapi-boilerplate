@@ -157,6 +157,46 @@ struktura `.agents` pochodzą z projektu numonis, uproszczone do potrzeb templat
 Świadomie bez zmian: Python 3.14 i PostgreSQL 18. Python 3.15 i PostgreSQL 19 to świeże
 wydania `.0`; templatka poczeka na pierwsze poprawki i pełne wsparcie paczek binarnych.
 
+## Lekcje z Numonis (listopad 2026)
+
+Templatka powstała z backendu Numonis. Ten przegląd przenosi wnioski, które Numonis zdobył
+później, często po incydentach. Każda zmiana ma test, który pada po zepsuciu kodu.
+
+| Obszar | Zmiana i powód |
+|---|---|
+| Transakcja i LLM | `SummarizeItemService` trzymał otwartą transakcję podczas wywołania modelu, więc połączenie z puli czekało razem z modelem. Usługa robi teraz commit odczytu, wywołuje model, blokuje wiersz (`get_item_for_update`) i zapisuje wynik tylko wtedy, gdy opis się nie zmienił. Silnik ustawia `idle_in_transaction_session_timeout` (60 s), więc ten sam błąd wychodzi już lokalnie. Za PgBouncerem ustaw `IDLE_IN_TRANSACTION_TIMEOUT=0`. |
+| Kolejka z kodu async | Jedynym wzorcem był synchroniczny route. Usługa async nie miała jak wrzucić zadania po commicie. Helpery `enqueue_*` są teraz async i publikują we własnej puli wątków z kontekstem logów. `RequestSummaryService` robi commit, a potem enqueue. |
+| Odzyskiwanie zadań | Late ACK i jeden Redis nadal mogą zgubić wiadomość. Reguła workerów wymaga decyzji dla każdego nowego zadania: co znajdzie zgubioną pracę (cron, ponowne żądanie klienta albo zadanie beat). |
+| Testy-strażnicy | `tests/architecture/`: repozytoria bez commitów, kierunek importów, publikacja tylko przez helpery, konwencje modeli (strefa czasu, UUIDv7, `public`, brak Enum, indeks na FK), lista publicznych tras, brak danych osobowych w logach. Każdy skan ma samotest ze złym wejściem. `tests/migrations/test_heads.py` pilnuje jednej głowy Alembica: w Numonis ponad 10 commitów scalało głowy po równoległych gałęziach. |
+| Reguły agentów | Ręczna tabela obszarów w `AGENTS.md` zastąpiona frontmatterem `paths:` w regułach. `just rules <pliki>` wypisuje reguły do przeczytania. `just agents-check` (i `just test`) sprawdza adaptery narzędzi, reguły globalne, globy z nieistniejącym katalogiem, długość reguł, linki, ścieżki i recipe `just`. Szczegóły Redis i beat przeniesiono do `.agents/references/workers.md`. Nowe referencje: lokalny rozwój i wzorzec auth/tenantów. |
+| Worktree i porty | Równolegli agenci w worktree dzielili porty i testową bazę. `just setup` daje każdemu checkoutowi slot: nazwę projektu Compose i porty bazowe + N×10. Nowy slot omija porty zajęte przez inny projekt. Kopia `.env` z innego worktree przechodzi na nowy slot. |
+| Recipe dla agentów | `just compose` blokował shell agenta. `just up` startuje w tle z `--wait` (API ma healthcheck). Doszły `just logs` (`--tail=200`), `just ps`, `just urls`, `just down` (wszystkie profile) i idempotentny `just seed`. |
+| Błąd `.env` | Parser `.env` w `just` usuwał cudzysłowy z `CORS_ORIGINS=["..."]`, więc `just app`, `just migrate` i `just seed` padały na skopiowanym `.env`. Wartości JSON są teraz w apostrofach; test pilnuje `.env.example`. |
+| Reguły | Standard wartości testu (nazwij regresję, udowodnij, że test pada). Zapisy współbieżne (`with_for_update`, `on_conflict_do_update`, `IntegrityError` zamiast sprawdź-i-wstaw). Tabela migracji zero-downtime. Indeks na FK i indeksy częściowe. `icontains(..., autoescape=True)` dla wyszukiwania. Dzień kalendarzowy w strefie firmy, nie w UTC. Głowy Alembica po rebase w `git.md`. |
+| Narzędzia | Pyright: `reportUnnecessaryTypeIgnoreComment` oraz sprawdzanie `.agents/` i `scripts/`. `just audit` (pip-audit na `uv.lock`, poza `just ci`, bo wymaga sieci). Pyright jest już przypięty przez `uv.lock`. |
+| Bedrock | Domyślny model to `eu.anthropic.claude-sonnet-5-5`. Karta modelu AWS potwierdza Converse na `bedrock-runtime` i `eu-central-1` jako region źródłowy profilu EU. Wcześniejsza uwaga o InvokeModel/Mantle dotyczyła endpointu `bedrock-mantle`, który nie obsługuje Converse. |
+
+Świadomie pominięto: system hooków z Numonis (ok. 3000 linii z testami, opłaca się w dużym
+repo), mechanizm vendorowanych skilli, snapshot complexipy (templatka nie ma starego kodu) i
+connection guard testów (wykrywa drugie połączenie z puli w requeście; warto go dodać, gdy
+projekt urośnie).
+
+### Kompletność templatki
+
+Druga runda sprawdziła start nowego projektu: usunięcie przykładu `items` łamało 11 testów i
+9 globów w regułach. Testy infrastruktury (limit body, koperta błędów, `session_scope()`,
+offline SQL) używały tras i tabeli przykładu. Strażnicy wymagali co najmniej jednego pliku,
+helpera i migracji.
+
+| Obszar | Zmiana i powód |
+|---|---|
+| Start projektu | `.agents/references/new-project.md` opisuje kroki: nazwa, usunięcie przykładu i opcjonalnie AI, usunięcie plików templatki. Po tych krokach `just ci` przechodzi; sprawdzono to na kopii repozytorium. |
+| Testy infrastruktury | Własne tymczasowe aplikacje, trasy i tabela tymczasowa zamiast `items`. Strażnicy przechodzą bez feature'a, a samotesty pilnują, że skan cokolwiek wykrywa. `agents-check` wymaga tylko katalogu bazowego globu. |
+| Usunięty nadmiar | `business_today()` i `BUSINESS_TIMEZONE` nie miały wywołania. `recovered_by` i `TASKS_WITHOUT_RECOVERY` były ceremonią bez zadania odzyskującego; zostaje reguła. README oddało szczegóły do reguł, referencji i `docs/deployment.md`. |
+| `/ready` | Sonda gotowości z `SELECT 1` i odpowiedzią 503. `/up` zostaje sondą życia bez bazy, żeby awaria bazy nie restartowała procesów. |
+| Obraz | Dwa etapy: w obrazie runtime nie ma uv. `--timeout-graceful-shutdown 25` kończy żądania przed SIGKILL platformy. |
+| Dependabot | Cotygodniowe grupy dla GitHub Actions (piny SHA) i `uv.lock`, z 7-dniowym cooldownem. |
+
 ## Weryfikacja pierwotnego przeglądu (PR #1)
 
 - Python 3.14.7 i PostgreSQL 18: pełny wariant AI **51 testów**, bez wywołań modelu.

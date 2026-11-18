@@ -61,15 +61,19 @@ known-third-party = ["alembic"]
 # Cognitive complexity gate (SonarSource metric): `just complexity`. Functions
 # above the limit fail CI — split them instead of raising the limit.
 [tool.complexipy]
-paths = ["app", "tests", "alembic"]
+paths = ["app", "tests", "alembic", "scripts", ".agents"]
 max-complexity-allowed = 10
 
 [tool.pyright]
 pythonVersion = "3.14"
 typeCheckingMode = "standard"
+# A stale ignore hides a place where the check no longer guards anything.
+reportUnnecessaryTypeIgnoreComment = "error"
 venvPath = "."
 venv = ".venv"
-exclude = ["**/node_modules", "**/__pycache__", "**/.*", "alembic/versions"]
+# An explicit include also checks .agents/; the old "**/.*" exclude skipped it.
+include = ["app", "tests", "alembic", "scripts", ".agents"]
+exclude = ["**/__pycache__", "alembic/versions"]
 
 [tool.pytest]
 strict = true

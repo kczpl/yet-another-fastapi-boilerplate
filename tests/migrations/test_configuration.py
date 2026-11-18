@@ -48,14 +48,15 @@ def test_generated_revision_has_utc_name_and_passes_lint(migration_config: Confi
 
 
 def test_offline_sql_qualifies_version_and_application_tables(migration_config: Config):
+    # An empty revision in the copy: a new project without a migration emits no version table.
+    command.revision(migration_config, message="probe")
     output = io.StringIO()
     migration_config.output_buffer = output
     command.upgrade(migration_config, "head", sql=True)
     sql = output.getvalue()
-    assert "CREATE TABLE public.alembic_version" in sql
-    assert "CREATE TABLE public.items" in sql
-    assert "CONSTRAINT items_pkey" in sql
-    assert "CONSTRAINT items_status_check" in sql
+    tables = re.findall(r"CREATE TABLE (\S+)", sql)
+    assert "public.alembic_version" in tables
+    assert [table for table in tables if not table.startswith("public.")] == []
 
 
 def test_autogenerate_ignores_unmanaged_tables_with_custom_search_path(migrated_db, monkeypatch):

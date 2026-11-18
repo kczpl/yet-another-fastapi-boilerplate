@@ -1,3 +1,9 @@
+---
+paths:
+  - "app/integrations/**/*.py"
+  - "app/workers/**/*.py"
+---
+
 # Integrations
 
 Keep vendor interactions behind small functions/clients in `integrations/<vendor>/` or in a

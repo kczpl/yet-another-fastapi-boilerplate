@@ -1,3 +1,10 @@
+---
+paths:
+  - "app/core/agents.py"
+  - "app/features/*/agents/**/*.py"
+  - "tests/features/*/agents/**/*.py"
+---
+
 # Optional Pydantic AI / Bedrock
 
 Install the `ai` extra. Each feature's `agents/` owns its output model, static prompt,
@@ -8,7 +15,8 @@ in `app/core/agents.py`.
   Caching is safe for prefork only when the parent hasn't constructed the client.
 - Standard AWS credential chain; configure BEDROCK_REGION and a BEDROCK_MODEL inference profile
   enabled for the account. `BedrockConverseModel` uses the Converse API. Check the Bedrock model
-  docs before you change the model: some models are available only through InvokeModel or Mantle.
+  docs before you change the model. The default EU profile of Sonnet 5.5 supports Converse on
+  `bedrock-runtime`; the `bedrock-mantle` endpoint does not support Converse.
 - Keep system instructions static; pass dynamic input as the user prompt or explicit deps.
 - Set output_type, name, retries and usage_limits. Log token usage and best-effort cost after runs.
 - `get_model_settings()` sets `request_timeout` from `AI_REQUEST_TIMEOUT`. This deadline covers one
@@ -20,6 +28,10 @@ in `app/core/agents.py`.
 - Put tools/validators in separate modules only when the agent grows enough to benefit, and
   explicitly register them in its factory; no mandatory side-effect barrel package.
 - LLM-bound background work uses the heavy queue. No live LLM calls in normal tests or CI.
+- Commit the read transaction before `agent.run()`. Write the output in a new transaction and
+  check again that the input did not change (`SummarizeItemService`).
+- For a batch of model calls, limit the concurrency with a semaphore and use
+  `gather(return_exceptions=True)`, so one failure does not cancel the batch.
 
 Tests validate output models and patch the async wrapper in service tests. Agent tests patch
 `get_model` to return a `TestModel` and clear the cached agent. Do not build the real Bedrock
