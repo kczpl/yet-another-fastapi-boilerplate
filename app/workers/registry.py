@@ -1,6 +1,9 @@
+from collections.abc import Callable
+from typing import Any, cast
 from uuid import UUID
 
 from app.core.logger import bind_context
+from app.workers.base import BaseTask
 from app.workers.celery import celery
 from app.workers.queues import QUEUE_DEFAULT, QUEUE_HEAVY
 from app.workers.runner import run_service
@@ -11,7 +14,18 @@ from app.workers.runner import run_service
 # service import here would close the features -> queue -> registry -> features cycle.
 
 
-@celery.task(name="tasks.summarize_item", queue=QUEUE_HEAVY, max_retries=0, time_limit=300, soft_time_limit=240)
+def celery_task(**options: Any) -> Callable[[Callable[..., Any]], BaseTask]:
+    # celery.task has no type hints. The cast gives each task the BaseTask type for enqueue.py.
+    return cast(Callable[[Callable[..., Any]], BaseTask], celery.task(**options))
+
+
+@celery_task(
+    name="tasks.summarize_item",
+    queue=QUEUE_HEAVY,
+    max_retries=0,
+    time_limit=300,
+    soft_time_limit=240,
+)
 def summarize_item_task(item_id: str) -> dict:
     from app.features.items.services.summarize import SummarizeItemService
 
@@ -20,7 +34,13 @@ def summarize_item_task(item_id: str) -> dict:
     return run_service(SummarizeItemService, UUID(item_id))
 
 
-@celery.task(name="tasks.example_cleanup", queue=QUEUE_DEFAULT, time_limit=300, soft_time_limit=240, max_retries=0)
+@celery_task(
+    name="tasks.example_cleanup",
+    queue=QUEUE_DEFAULT,
+    max_retries=0,
+    time_limit=300,
+    soft_time_limit=240,
+)
 def example_cleanup_task() -> dict:
     # Idempotent cron — beat fires again next interval, so max_retries=0. Replace
     # the service with your own periodic job (see .agents/rules/backend/background.md).
@@ -31,11 +51,23 @@ def example_cleanup_task() -> dict:
 
 # Liveness probes — one per worker queue. Bodies are pure on purpose (no DB/Redis)
 # so the probe tests only "is this worker pulling and running tasks".
-@celery.task(name="tasks.heartbeat_default", queue=QUEUE_DEFAULT, max_retries=0, time_limit=30, soft_time_limit=20)
+@celery_task(
+    name="tasks.heartbeat_default",
+    queue=QUEUE_DEFAULT,
+    max_retries=0,
+    time_limit=30,
+    soft_time_limit=20,
+)
 def heartbeat_default_task() -> dict:
     return {"queue": QUEUE_DEFAULT}
 
 
-@celery.task(name="tasks.heartbeat_heavy", queue=QUEUE_HEAVY, max_retries=0, time_limit=30, soft_time_limit=20)
+@celery_task(
+    name="tasks.heartbeat_heavy",
+    queue=QUEUE_HEAVY,
+    max_retries=0,
+    time_limit=30,
+    soft_time_limit=20,
+)
 def heartbeat_heavy_task() -> dict:
     return {"queue": QUEUE_HEAVY}

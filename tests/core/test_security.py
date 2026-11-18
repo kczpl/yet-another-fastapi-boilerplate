@@ -1,17 +1,18 @@
-from collections.abc import Sequence
+from collections.abc import AsyncIterable, Sequence
 from ipaddress import ip_network
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
+from pydantic import BaseModel
 from starlette.responses import PlainTextResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from structlog.testing import capture_logs
 
 from app.core import security
 from app.core.config import api_config
+from app.core.exceptions import setup_exception_handlers
 from app.core.security import (
-    HEALTHCHECK_PATH,
     MAX_REQUEST_SIZE,
     SECURITY_HEADERS,
     FixedWindowRateLimit,
@@ -41,74 +42,99 @@ def _secured(*, blocked_ips: Sequence[IPNetwork] = (), rate_limit: FixedWindowRa
     return SecurityMiddleware(_ok, blocked_ips=blocked_ips, rate_limit=rate_limit)
 
 
+class Payload(BaseModel):
+    name: str
+
+
+def _app() -> ASGIApp:
+    # The middleware and handlers of app.main on a throwaway app without feature routes.
+    # Build it in the test: setup reads api_config when it builds the middleware.
+    app = FastAPI()
+    setup_exception_handlers(app)
+
+    @app.get("/ping")
+    async def ping() -> dict:
+        return {}
+
+    @app.post("/payload", status_code=201)
+    async def payload(body: Payload) -> dict:
+        return {}
+
+    return setup_security_middleware(app)
+
+
 async def _get(app: ASGIApp, path: str = "/", client_ip: str = CLIENT_IP, **headers: str) -> Response:
     transport = ASGITransport(app=app, client=(client_ip, 123))
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         return await client.get(path, headers=headers)
 
 
+async def _post(content: bytes | AsyncIterable[bytes], **headers: str) -> Response:
+    async with AsyncClient(transport=ASGITransport(app=_app()), base_url="http://test") as client:
+        return await client.post("/payload", content=content, headers=headers)
+
+
 class TestMiddleware:
-    async def test_request_id_is_generated(self, client: AsyncClient):
-        resp = await client.get("/api/v1/items")
+    async def test_request_id_is_generated(self):
+        resp = await _get(_app(), "/ping")
 
         assert resp.headers["x-request-id"]
 
-    async def test_request_id_is_propagated(self, client: AsyncClient):
-        resp = await client.get("/api/v1/items", headers={"X-Request-ID": "req-123"})
+    async def test_request_id_is_propagated(self):
+        resp = await _get(_app(), "/ping", **{"X-Request-ID": "req-123"})
 
         assert resp.headers["x-request-id"] == "req-123"
 
-    async def test_security_headers_are_set(self, client: AsyncClient):
-        resp = await client.get("/api/v1/items")
+    async def test_security_headers_are_set(self):
+        resp = await _get(_app(), "/ping")
 
         assert resp.headers["x-content-type-options"] == "nosniff"
         assert resp.headers["x-frame-options"] == "DENY"
         assert resp.headers["strict-transport-security"].startswith("max-age=")
 
-    async def test_oversized_body_is_rejected(self, client: AsyncClient):
-        headers = {"Content-Length": str(MAX_REQUEST_SIZE + 1)}
-
-        resp = await client.post("/api/v1/items", content=b"{}", headers=headers)
+    async def test_oversized_body_is_rejected(self):
+        resp = await _post(b"{}", **{"Content-Length": str(MAX_REQUEST_SIZE + 1)})
 
         assert resp.status_code == 413
         assert resp.json()["error"] == "api.general.file_too_large"
 
     @pytest.mark.parametrize("length", ["invalid", "-1"])
-    async def test_invalid_content_length_is_400(self, client: AsyncClient, length: str):
-        response = await client.post("/api/v1/items", content=b"{}", headers={"Content-Length": length})
+    async def test_invalid_content_length_is_400(self, length: str):
+        response = await _post(b"{}", **{"Content-Length": length})
         assert response.status_code == 400
 
-    async def test_chunked_body_cannot_bypass_limit(self, client: AsyncClient, monkeypatch):
+    async def test_chunked_body_cannot_bypass_limit(self, monkeypatch):
         monkeypatch.setattr(security, "MAX_REQUEST_SIZE", 16)
 
         async def chunks():
             yield b'{"name":'
             yield b'"too much data"}'
 
-        response = await client.post("/api/v1/items", content=chunks(), headers={"Content-Type": "application/json"})
+        response = await _post(chunks(), **{"Content-Type": "application/json"})
         assert response.status_code == 413
         assert response.json() == {"error": "api.general.file_too_large", "data": {}}
 
-    async def test_body_at_limit_is_accepted(self, client: AsyncClient, monkeypatch):
+    async def test_body_at_limit_is_accepted(self, monkeypatch):
         body = b'{"name":"ok"}'
         monkeypatch.setattr(security, "MAX_REQUEST_SIZE", len(body))
-        response = await client.post("/api/v1/items", content=body, headers={"Content-Type": "application/json"})
+        response = await _post(body, **{"Content-Type": "application/json"})
         assert response.status_code == 201
 
 
 class TestLoggingMiddleware:
     async def test_request_is_logged_with_static_event(self):
         with capture_logs() as logs:
-            await _get(LoggingMiddleware(_ok), "/items", **{"X-Request-ID": "req-1"})
+            await _get(LoggingMiddleware(_ok), "/ping", **{"X-Request-ID": "req-1"})
 
         assert len(logs) == 1
         assert logs[0]["event"] == "http_request"
         assert logs[0]["status_code"] == 200
         assert logs[0]["client_ip"] == CLIENT_IP
 
-    async def test_healthcheck_is_not_logged(self):
+    @pytest.mark.parametrize("path", ["/up", "/ready"])
+    async def test_probe_is_not_logged(self, path: str):
         with capture_logs() as logs:
-            response = await _get(LoggingMiddleware(_ok), HEALTHCHECK_PATH)
+            response = await _get(LoggingMiddleware(_ok), path)
 
         assert response.status_code == 200
         assert logs == []
@@ -156,10 +182,11 @@ class TestSecurityMiddleware:
         assert limited.status_code == 429
         assert next_window.status_code == 200
 
-    async def test_healthcheck_is_not_rate_limited(self):
+    @pytest.mark.parametrize("path", ["/up", "/ready"])
+    async def test_probe_is_not_rate_limited(self, path: str):
         app = _secured(rate_limit=FixedWindowRateLimit(1, 60, clock=FakeClock(125.0)))
 
-        statuses = [(await _get(app, HEALTHCHECK_PATH)).status_code for _ in range(3)]
+        statuses = [(await _get(app, path)).status_code for _ in range(3)]
 
         assert statuses == [200, 200, 200]
 
@@ -192,20 +219,9 @@ class TestSecurityMiddleware:
 
 
 class TestSecuritySetup:
-    # A throwaway app per test: setup reads api_config when it builds the middleware.
-    @staticmethod
-    def _app() -> ASGIApp:
-        app = FastAPI()
-
-        @app.get("/ping")
-        async def ping() -> dict:
-            return {}
-
-        return setup_security_middleware(app)
-
     async def test_429_keeps_cors_request_id_and_security_headers(self, monkeypatch):
         monkeypatch.setattr(api_config, "RATE_LIMIT_PER_MINUTE", 1)
-        app = self._app()
+        app = _app()
         headers = {"Origin": "http://localhost:3000", "X-Request-ID": "limited"}
 
         await _get(app, "/ping", **headers)
@@ -219,8 +235,8 @@ class TestSecuritySetup:
     async def test_blocked_ips_come_from_config(self, monkeypatch):
         monkeypatch.setattr(api_config, "BLOCKED_IPS", [ip_network("203.0.113.0/24")])
 
-        blocked = await _get(self._app(), "/ping")
-        allowed = await _get(self._app(), "/ping", client_ip="198.51.100.1")
+        blocked = await _get(_app(), "/ping")
+        allowed = await _get(_app(), "/ping", client_ip="198.51.100.1")
 
         assert blocked.status_code == 403
         assert allowed.status_code == 200

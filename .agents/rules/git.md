@@ -22,3 +22,10 @@ optional, for example `api`, `db`, `workers` or `ai`.
 - Bullet points use a hyphen and one space. Wrapped lines use a hanging indent.
 - Write the body in ASD-STE100 (`core.md` §6).
 - Commit messages carry no tool attribution or co-author trailers.
+
+## Migrations on a branch
+
+Two branches that each add a migration on the same parent give two Alembic heads after the
+merge. After a rebase on `master`, run `uv run --no-sync alembic -c alembic/alembic.ini heads`.
+If your migration is not the only head, set its `down_revision` to the new head of `master`.
+Do not add a merge migration on a work branch. `tests/migrations/test_heads.py` fails on two heads.

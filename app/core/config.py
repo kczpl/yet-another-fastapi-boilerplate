@@ -44,12 +44,15 @@ class DatabaseConfig(Config):
     POOL_MAX_OVERFLOW: int = 2
     POOL_TIMEOUT: int = 30
     POOL_RECYCLE: int = 1800
+    # PostgreSQL ends a session that idles in a transaction longer than this (seconds).
+    # 0 disables it. PgBouncer rejects the startup option; set the timeout on the role there.
+    IDLE_IN_TRANSACTION_TIMEOUT: int = Field(default=60, ge=0)
 
 
 class AIConfig(Config):
     # Bedrock inference-profile ids are account- and region-specific — set the exact
     # ids enabled for your account. Defaults target EU inference profiles.
-    BEDROCK_MODEL: str = "eu.anthropic.claude-sonnet-4-6"
+    BEDROCK_MODEL: str = "eu.anthropic.claude-sonnet-5-5"
     BEDROCK_REGION: str = "eu-central-1"
 
     AI_MAX_TOKENS: int = 8_192

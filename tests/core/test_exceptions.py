@@ -1,16 +1,24 @@
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, Response
+from pydantic import BaseModel, Field
 from starlette.types import ASGIApp
 
 from app.core.exceptions import raise_conflict, setup_exception_handlers
 from app.core.security import setup_security_middleware
-from app.features.items.schemas import ItemCreate
+
+
+class Payload(BaseModel):
+    name: str = Field(min_length=1)
 
 
 def _app_with_failing_routes() -> ASGIApp:
     # A throwaway app so the global one is not mutated by test-only routes.
     failing_app = FastAPI()
     setup_exception_handlers(failing_app)
+
+    @failing_app.post("/payload")
+    async def payload(body: Payload) -> dict:
+        return {}
 
     @failing_app.get("/conflict")
     async def conflict():
@@ -22,17 +30,22 @@ def _app_with_failing_routes() -> ASGIApp:
 
     @failing_app.get("/invalid-internal-model")
     async def invalid_internal_model():
-        ItemCreate(name="")
+        Payload(name="")
 
     return setup_security_middleware(failing_app)
 
 
-async def _get(path: str):
+async def _request(method: str, path: str, **kwargs) -> Response:
     # raise_app_exceptions=False: Starlette re-raises unhandled errors after the
     # 500 response is sent, which would otherwise surface in the test itself.
     transport = ASGITransport(app=_app_with_failing_routes(), raise_app_exceptions=False)
+    headers = {"Origin": "http://localhost:3000", "X-Request-ID": "failed-request"}
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        return await client.get(path, headers={"Origin": "http://localhost:3000", "X-Request-ID": "failed-request"})
+        return await client.request(method, path, headers=headers, **kwargs)
+
+
+async def _get(path: str) -> Response:
+    return await _request("GET", path)
 
 
 class TestErrorEnvelope:
@@ -54,14 +67,14 @@ class TestErrorEnvelope:
         assert resp.status_code == 404
         assert resp.json() == {"error": "api.general.not_found", "data": {"detail": "Not Found"}}
 
-    async def test_method_not_allowed_uses_envelope(self, client: AsyncClient):
-        resp = await client.delete("/api/v1/items")
+    async def test_method_not_allowed_uses_envelope(self):
+        resp = await _request("DELETE", "/payload")
 
         assert resp.status_code == 405
         assert resp.json()["error"] == "api.general.method_not_allowed"
 
-    async def test_missing_field_maps_to_required_parameter_missing(self, client: AsyncClient):
-        resp = await client.post("/api/v1/items", json={})
+    async def test_missing_field_maps_to_required_parameter_missing(self):
+        resp = await _request("POST", "/payload", json={})
 
         assert resp.status_code == 422
         details = resp.json()["data"]["details"]

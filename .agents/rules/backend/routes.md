@@ -1,10 +1,19 @@
+---
+paths:
+  - "app/api/**/*.py"
+  - "app/features/*/*routes.py"
+  - "app/features/*/dependencies.py"
+  - "app/features/*/schemas.py"
+  - "app/core/pagination.py"
+---
+
 # HTTP layer
 
 Routes live beside their feature. Use explicit full paths without trailing slashes; apply
 `/api/v1` once in `app/api/__init__.py`. Declare response_model and status_code.
 
-Use async routes for async I/O. Sync-only operations such as Celery `.delay()` belong in a
-sync route (FastAPI's thread pool) or an explicit thread-pool call, never directly in async code.
+Use async routes. Never call blocking code directly in them. A route enqueues work through a
+service that commits and then awaits an async `enqueue_*` helper (`RequestSummaryService`).
 
 Pydantic validates request shape. A PATCH schema types each field as `T | MISSING = MISSING`
 (`from pydantic import MISSING`). `model_dump()` leaves out the fields that the request does not
@@ -23,6 +32,9 @@ Routes take `Annotated[Pagination, Query()]`, a FastAPI query parameter model.
 Pagination defaults: page=1, page_size=10, max page_size=100. Return items, page, page_size,
 total_count, total_pages. Preserve totals on empty out-of-range pages. Use a deterministic order
 with a unique tie-breaker. A count query is clearer than a window count that disappears on empty pages.
+
+`tests/architecture/test_route_inventory.py` lists each route without authentication, with the
+reason. A new route gets an auth dependency (add it to `AUTH_DEPENDENCIES`) or an entry there.
 
 The AI endpoint is registered only when its extra is installed. Keep core CRUD independent of
 optional worker/model imports. CORS is configured explicitly via CORS_ORIGINS.

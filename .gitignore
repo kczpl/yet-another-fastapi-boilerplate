@@ -33,3 +33,4 @@ scripts/requests/
 # Local agent settings. Shared agent guidance lives in AGENTS.md and .agents/.
 .claude/
 .codex/
+.agents/temp/

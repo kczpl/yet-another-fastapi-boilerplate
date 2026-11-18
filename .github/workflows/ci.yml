@@ -72,7 +72,7 @@ jobs:
       - name: Worker task discovery
         if: matrix.variant != 'core'
         run: |
-          uv run --no-sync python -c 'from app.workers.celery import celery; celery.loader.import_default_modules(); assert "tasks.example_cleanup" in celery.tasks'
+          uv run --no-sync python -c 'from app.workers.celery import celery; celery.loader.import_default_modules(); assert "tasks.heartbeat_default" in celery.tasks'
       - name: Build runtime image
         env:
           VARIANT: ${{ matrix.variant }}

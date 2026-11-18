@@ -28,6 +28,13 @@ async def get_item_by_id(db: AsyncSession, item_id: uuid.UUID) -> Item | None:
     return result.scalar_one_or_none()
 
 
+async def get_item_for_update(db: AsyncSession, item_id: uuid.UUID) -> Item | None:
+    # The row lock makes concurrent writers wait until this transaction ends.
+    # populate_existing replaces the stale attributes of an item that the session holds.
+    stmt = select(Item).where(Item.id == item_id).with_for_update().execution_options(populate_existing=True)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
 async def list_items_with_count(
     db: AsyncSession,
     *,

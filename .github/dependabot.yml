@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # The workflows pin each action to a commit SHA. Dependabot moves the SHA and the version comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # A new release must be 7 days old: a compromised release is often found in that time.
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python:
+        patterns: ["*"]

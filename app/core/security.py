@@ -14,7 +14,8 @@ from app.core.exceptions import APIException, error_response
 from app.core.logger import bind_context, clear_context, log
 
 MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10MB
-HEALTHCHECK_PATH = "/up"  # liveness probe — skip logging and rate limit
+# Liveness and readiness probes: no request log and no rate limit.
+PROBE_PATHS = frozenset({"/up", "/ready"})
 RATE_LIMIT_WINDOW_SECONDS = 60
 
 # Each HTTP response gets these headers. They replace a route value with the same name.
@@ -61,7 +62,7 @@ class LoggingMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["path"] == HEALTHCHECK_PATH:
+        if scope["type"] != "http" or scope["path"] in PROBE_PATHS:
             await self.app(scope, receive, send)
             return
 
@@ -186,7 +187,7 @@ class SecurityMiddleware:
         await self.app(scope, receive, send)
 
     def _retry_after(self, path: str, client_ip: str | None) -> int | None:
-        if self._rate_limit is None or path == HEALTHCHECK_PATH:
+        if self._rate_limit is None or path in PROBE_PATHS:
             return None
         return self._rate_limit.retry_after(client_ip or "unknown")
 

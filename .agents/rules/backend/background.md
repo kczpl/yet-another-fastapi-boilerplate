@@ -1,3 +1,8 @@
+---
+paths:
+  - "app/workers/**/*.py"
+---
+
 # Optional workers
 
 Install `workers` or `ai` with uv. Docker services use the workers profile. Celery uses Redis,
@@ -6,11 +11,19 @@ Queue constants live in `workers/queues.py`: default for short work, heavy for l
 Both queues are declared durable; unrouted tasks go to default and unknown queues are rejected.
 A single worker consuming both queues does not isolate latency; use separate consumers when needed.
 
-Tasks in `registry.py` are thin wrappers around `run_service()`. Import service classes inside
-task bodies to avoid import cycles and parent-process client initialization. Feature code uses
-typed helpers in `workers/enqueue.py`. Celery publishing is synchronous; don't block async routes.
+Tasks in `registry.py` are thin wrappers around `run_service()`. Declare them with
+`@celery_task(...)`, not with a raw `@celery.task`: the helper gives them the `BaseTask` type.
+Import service classes inside task bodies to avoid import cycles and parent-process client
+initialization.
+
+Feature code awaits the async `enqueue_*` helpers of `workers/enqueue.py` after the commit.
+A Celery publish blocks, so the helpers publish in their own thread pool. Tests reject
+`.delay()` and `.apply_async()` outside `app/workers/`.
 Task arguments are JSON values. The enqueue helper sends `str(item_id)`, and the task parses it
 with `UUID(item_id)`. Services take typed values and return a TypedDict.
+
+A message can still be lost. Before you add a task, decide what finds its lost work: a beat
+task, a new request from the client, or nothing when the loss does no harm.
 
 ## Lifecycle
 
@@ -29,24 +42,18 @@ Ordinary failures/timeouts are acknowledged, preventing infinite redelivery of f
 Producer connection/publish retries are finite; worker connections retry indefinitely.
 Connection loss cancels running unacknowledged tasks; cancellation cannot undo external effects.
 
-The Redis visibility timeout must exceed every task's hard limit plus any ETA/countdown.
-Validation compares it to the global limit only; review decorator overrides as well.
-Whole-worker loss may wait for visibility timeout before redelivery. Avoid long ETA tasks.
-Compose runs workers directly with an 11-minute shutdown grace period; keep it above task limits.
-Restart workers to load code changes.
-
 Late ACKs mean possible redelivery. The summary example skips already-completed results on
 sequential redelivery, but concurrent tasks or a crash after an external call can repeat cost.
 Do not call that exactly-once delivery. Use vendor idempotency keys and task-specific locking
 or an outbox when required. A Redis marker written after sending does not close the crash window.
+Idempotency converges on entity state, a unique constraint or a row lock. Do not deduplicate on
+the Celery task_id: a retry reuses it. Never wait for the result of another task in a task; use
+one task or a chain.
 
-Beat has an example daily cleanup and per-queue heartbeat tasks. Keep one beat scheduler per
-deployment. Sentry monitors these only when its DSN is configured. Tasks do not persist results;
-add a result backend only when a workflow needs it.
-Compose persists beat's schedule and syncs after each published task; it does not guarantee
-catch-up of missed schedules or atomicity between schedule state and task publication.
+Beat runs the example daily cleanup and one heartbeat per queue. Keep one beat scheduler per
+deployment. Beat entries use `crontab`, not `timedelta`: Sentry Crons reads cron expressions.
+Tasks do not store results; add a result backend only when a workflow reads them.
 
-Redis uses a volume, AOF with appendfsync always and noeviction. This prioritizes persistence
-over throughput but does not provide high availability or protect against storage loss.
-Convert existing RDB-only data to AOF online before restarting with the new configuration;
-see README and the linked Redis persistence documentation.
+Read the [workers reference](../../references/workers.md) before you add a recovery task or
+change time limits, the visibility timeout, Redis persistence, beat persistence or the worker
+settings of Compose.
