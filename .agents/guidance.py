@@ -13,6 +13,7 @@ FORBIDDEN_FILES = ("CLAUDE.md", "CLAUDE.local.md")
 FORBIDDEN_DIRS = (".claude/", ".codex/")
 PATH_ROOTS = (".agents/", ".github/", "alembic/", "app/", "docs/", "scripts/", "tests/")
 PLACEHOLDER = re.compile(r"[*<>{}\s]|\.\.\.")
+GLOB = re.compile(r"[*?[]")
 CODE_SPAN = re.compile(r"`([^`\n]+)`")
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 RECIPE = re.compile(r"^(?:alias\s+)?([A-Za-z_][\w-]*)")
@@ -90,15 +91,24 @@ def _rule_problems(root: Path, files: list[str], path: str, agents: str) -> list
     elif not patterns:
         problems.append(f"{path}: a scoped rule needs a paths: list")
     problems.extend(
-        f"{path}: {pattern!r} matches no file" for pattern in patterns or [] if not _matches(files, pattern)
+        f"{path}: {pattern!r}: {_base(pattern)} does not exist"
+        for pattern in patterns or []
+        if not _exists(files, _base(pattern))
     )
     if len(text.splitlines()) > MAX_RULE_LINES:
         problems.append(f"{path}: more than {MAX_RULE_LINES} lines; move details to .agents/references/")
     return problems
 
 
-def _matches(files: list[str], pattern: str) -> bool:
-    return any(PurePosixPath(path).full_match(pattern) for path in files)
+def _base(pattern: str) -> str:
+    # A glob can name files that a new project does not have yet. Its fixed part must exist.
+    parts = PurePosixPath(pattern).parts
+    glob = next((index for index, part in enumerate(parts) if GLOB.search(part)), len(parts))
+    return "/".join(parts[:glob])
+
+
+def _exists(files: list[str], path: str) -> bool:
+    return any(file == path or file.startswith(f"{path}/") for file in files)
 
 
 def check_links(root: Path, files: list[str]) -> list[str]:

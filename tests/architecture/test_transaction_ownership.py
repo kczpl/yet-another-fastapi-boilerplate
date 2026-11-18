@@ -4,10 +4,11 @@ import pytest
 
 from tests.architecture.source import APP_DIR
 
+FEATURES_DIR = APP_DIR / "features"
+
 
 def _repository_files() -> list:
-    features = APP_DIR / "features"
-    return sorted([*features.glob("*/repository.py"), *features.glob("*/repository/*.py")])
+    return sorted([*FEATURES_DIR.glob("*/repository.py"), *FEATURES_DIR.glob("*/repository/*.py")])
 
 
 def _ownership_violations(source: str) -> list[str]:
@@ -36,11 +37,11 @@ def test_finds_commits_and_commit_parameters(source: str, expected: list[str]):
 
 
 def test_repositories_never_commit():
-    files = _repository_files()
+    # A new project can have no feature yet. A wrong scan root must not pass.
+    assert FEATURES_DIR.is_dir()
     offenders = [
         f"{path.relative_to(APP_DIR)}:{violation}"
-        for path in files
+        for path in _repository_files()
         for violation in _ownership_violations(path.read_text())
     ]
-    assert files
     assert offenders == [], "Repositories flush only. The service or session_scope() commits."

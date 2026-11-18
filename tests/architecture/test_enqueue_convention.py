@@ -71,15 +71,31 @@ def test_workers_import_no_features_at_module_level():
     assert offenders == []
 
 
-def test_public_enqueue_helpers_are_async():
+def _helper_problems(source: str) -> list[str]:
     # A sync helper publishes on the event loop thread.
     public = [
         node
-        for node in ast.parse(ENQUEUE_MODULE.read_text()).body
+        for node in ast.parse(source).body
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and not node.name.startswith("_")
     ]
-    offenders = [node.name for node in public if not isinstance(node, ast.AsyncFunctionDef)]
-    misnamed = [node.name for node in public if not node.name.startswith("enqueue_")]
-    assert public
-    assert offenders == []
-    assert misnamed == []
+    return [
+        *(f"{node.name}: not async" for node in public if not isinstance(node, ast.AsyncFunctionDef)),
+        *(f"{node.name}: name without enqueue_" for node in public if not node.name.startswith("enqueue_")),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("def enqueue_report(report_id):\n    pass", ["enqueue_report: not async"]),
+        ("async def publish_report(report_id):\n    pass", ["publish_report: name without enqueue_"]),
+        ("async def enqueue_report(report_id):\n    pass\ndef _delay(task):\n    pass", []),
+    ],
+    ids=["sync", "misnamed", "async_and_private"],
+)
+def test_finds_sync_and_misnamed_helpers(source: str, expected: list[str]):
+    assert _helper_problems(source) == expected
+
+
+def test_public_enqueue_helpers_are_async():
+    assert _helper_problems(ENQUEUE_MODULE.read_text()) == []

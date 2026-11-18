@@ -54,7 +54,7 @@ def test_consistent_guidance_has_no_problems(tmp_path: Path):
         ),
         (
             {".agents/rules/backend/api.md": '---\npaths:\n  - "app/api/**"\n---\n'},
-            ".agents/rules/backend/api.md: 'app/api/**' matches no file",
+            ".agents/rules/backend/api.md: 'app/api/**': app/api does not exist",
         ),
         (
             {".agents/rules/core.md": "line\n" * 101},
@@ -68,6 +68,14 @@ def test_consistent_guidance_has_no_problems(tmp_path: Path):
 )
 def test_reports_each_problem(tmp_path: Path, change: dict[str, str], problem: str):
     assert guidance.check(_repository(tmp_path, {**BASE, **change})) == [problem]
+
+
+def test_glob_for_future_files_needs_only_its_directory(tmp_path: Path):
+    # A new project has no feature yet; the rule still names where the features go.
+    rule = '---\npaths:\n  - "app/features/*/models.py"\n---\n'
+    files = {**BASE, ".agents/rules/backend/db.md": rule, "app/features/__init__.py": ""}
+
+    assert guidance.check(_repository(tmp_path, files)) == []
 
 
 def test_routes_a_file_to_the_rules_whose_paths_match():

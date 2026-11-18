@@ -10,10 +10,11 @@ def _script() -> ScriptDirectory:
     return ScriptDirectory.from_config(Config(str(ALEMBIC_INI)))
 
 
-def test_migration_history_has_one_head():
+def test_migration_history_has_at_most_one_head():
     # Two branches that add a migration on the same parent give two heads after the merge.
+    # A new project without a migration has no head.
     heads = _script().get_heads()
-    assert len(heads) == 1, (
+    assert len(heads) <= 1, (
         f"Alembic has {len(heads)} heads: {heads}. On a work branch, set down_revision to the "
         "current head after the rebase. Do not add a merge migration there."
     )

@@ -33,7 +33,7 @@ hooks that print the rules; this template keeps the manual step.
    show. Move details, procedures and examples to `references/` and link them from the rule.
 4. Use ASD-STE100 Simplified Technical English (see `rules/core.md`).
 5. Run `just agents-check` before a commit. It finds tool adapters, global rules that
-   `AGENTS.md` does not name, scoped rules without `paths:`, globs that match no file, rules
+   `AGENTS.md` does not name, scoped rules without `paths:`, globs with a missing directory, rules
    above the size limit, broken links, missing repository paths and unknown `just` recipes.
 6. Start a new agent session to check a change. A listed file is no proof that the agent read it.
 
