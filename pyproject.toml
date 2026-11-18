@@ -6,36 +6,36 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     # core
-    "fastapi>=0.162.0",
+    "fastapi>=0.162.4",
     "uvicorn[standard]>=0.54.0",
-    "pydantic>=2.14.1",
-    "pydantic-settings>=2.16.1",
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.2",
     # db
-    "sqlalchemy[asyncio]>=2.1.6",
-    "psycopg[binary]>=3.3.6",
+    "sqlalchemy[asyncio]>=2.1.8",
+    "psycopg[binary]>=3.3.8",
     "alembic[tz]>=1.20.1",
     # observability
-    "sentry-sdk>=2.73.0",
+    "sentry-sdk>=2.74.0",
     "structlog>=26.1.0",
 ]
 
 [project.optional-dependencies]
-workers = ["celery[redis]>=5.6.3"]
+workers = ["celery[redis]>=5.7.0"]
 ai = [
-    "celery[redis]>=5.6.3",
-    "pydantic-ai-slim[bedrock]>=2.61.0",
-    "genai-prices>=0.1.13",
+    "celery[redis]>=5.7.0",
+    "pydantic-ai-slim[bedrock]>=2.67.0",
+    "genai-prices>=0.2.3",
 ]
 
 [dependency-groups]
 dev = [
-    "complexipy>=8.2.0",
+    "complexipy>=8.3.0",
     "factory-boy>=3.3.3",
     "httpx>=0.28.1",
     "pyright>=1.1.414",
-    "pytest>=9.1.1",
-    "pytest-asyncio>=1.4.1",
-    "ruff>=0.17.2",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1.post1",
+    "ruff>=0.17.4",
 ]
 
 [tool.ruff]
