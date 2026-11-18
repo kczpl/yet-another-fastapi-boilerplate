@@ -29,7 +29,7 @@ async def main() -> None:
             created = await seed(db)
     finally:
         await engine.dispose()
-    log.info("seed_completed", created_items=created)
+    log.info("seed_completed", created_rows=created)
 
 
 if __name__ == "__main__":

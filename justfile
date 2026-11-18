@@ -32,11 +32,11 @@ ps:
 
 # Print the URLs and ports of this checkout.
 urls:
-  @echo "API       http://localhost:${API_PORT:-8000}  (docs: /docs, liveness: /up)"
+  @echo "API       http://localhost:${API_PORT:-8000}  (docs: /docs, probes: /up, /ready)"
   @echo "Postgres  localhost:${POSTGRES_PORT:-5432}  (test: ${POSTGRES_TEST_PORT:-5433})"
   @echo "Redis     localhost:${REDIS_PORT:-6379}  (workers profile)"
 
-# Load the demo items into an empty database. Safe to run again.
+# Load the demo data into an empty database. Safe to run again.
 seed:
   uv run --no-sync python -m scripts.seed
 

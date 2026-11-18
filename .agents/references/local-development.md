@@ -31,7 +31,7 @@ then the command again.
 | `just urls` | Prints the API, PostgreSQL and Redis addresses of this checkout. |
 | `just ps` | Shows the state of the containers. |
 | `just logs api` | Prints the last 200 log lines of a service and stops. Add `-f` only to follow them. |
-| `just seed` | Loads three demo items into an empty database. Safe to run again. |
+| `just seed` | Loads the demo data into an empty database. Safe to run again. |
 | `just down` | Stops all services of this checkout, also the test database and the workers. Keeps the data. |
 
 The api container reloads on a change in `app/`. The workers do not reload: run
@@ -40,19 +40,21 @@ before the API starts. After you add a migration to a running stack, run `just m
 
 ## Call the API
 
-The example routes are public. Read the port from `just urls`:
+Read the port from `just urls`. `just` loads `.env`, but your shell does not: set `API_PORT`
+first.
 
 ```bash
-curl -s "http://localhost:$API_PORT/api/v1/items"
-curl -s -X POST "http://localhost:$API_PORT/api/v1/items" -H 'content-type: application/json' -d '{"name": "Test"}'
+curl -s "http://localhost:$API_PORT/ready"
+curl -s "http://localhost:$API_PORT/openapi.json"
 ```
 
-`just` loads `.env`, but your shell does not. Read `API_PORT` from `.env` or `just urls` first.
+In development, `/docs` shows each route. `PUBLIC_ROUTES` in
+`tests/architecture/test_route_inventory.py` lists the routes that need no login.
 
 ## Run the checks
 
 - `just test` starts the test database of this checkout and runs pytest. Give pytest
-  arguments after it: `just test tests/features/items -q`.
+  arguments after it: `just test tests/core -q`.
 - `just ci` runs lint, types, complexity and the tests. Run it before a commit.
 - `just agents-check` checks only the agent guidance.
 

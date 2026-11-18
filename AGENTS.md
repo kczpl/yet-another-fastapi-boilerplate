@@ -21,6 +21,7 @@ without files prints the whole map.
 
 ## References
 
+- Start a new project from this template: `.agents/references/new-project.md`.
 - Run, call or test the app locally, also in a worktree: `.agents/references/local-development.md`.
 - Authentication, roles or tenants: `.agents/references/auth-and-tenancy.md`.
 - Worker time limits, the broker, Redis persistence or beat: `.agents/references/workers.md`.
@@ -39,6 +40,18 @@ Do not nest transaction owners. Commit before a slow call (LLM, HTTP, S3).
 
 `app.main.api` is the FastAPI object for dependency overrides and OpenAPI. `app.main.app` is the
 ASGI entry point. It wraps `api` with CORS, request logging and `SecurityMiddleware`.
+
+## Add a feature
+
+1. Create `app/features/<domain>/` with the files above. Add only the files that it uses.
+2. Register the router in `app/api/__init__.py` and the models in `app/models.py`.
+3. Add the error keys to `ERRORS` in `app/core/errors.py`.
+4. Run `just makemigration "create <table> table"` and review the migration.
+5. Give each route an auth dependency, or list it with the reason in `PUBLIC_ROUTES` of
+   `tests/architecture/test_route_inventory.py`.
+6. For a task, add it to `app/workers/registry.py` and an `enqueue_*` helper to
+   `app/workers/enqueue.py`. Decide what finds its lost work (`background.md`).
+7. Mirror the tests in `tests/features/<domain>/`. Put the factories in `tests/factories/`.
 
 `tests/architecture/` enforces the layer rules. When one of its tests fails, fix the code. Do
 not add an allowlist.
