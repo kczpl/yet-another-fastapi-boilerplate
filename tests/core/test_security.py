@@ -13,7 +13,6 @@ from app.core import security
 from app.core.config import api_config
 from app.core.exceptions import setup_exception_handlers
 from app.core.security import (
-    HEALTHCHECK_PATH,
     MAX_REQUEST_SIZE,
     SECURITY_HEADERS,
     FixedWindowRateLimit,
@@ -132,9 +131,10 @@ class TestLoggingMiddleware:
         assert logs[0]["status_code"] == 200
         assert logs[0]["client_ip"] == CLIENT_IP
 
-    async def test_healthcheck_is_not_logged(self):
+    @pytest.mark.parametrize("path", ["/up", "/ready"])
+    async def test_probe_is_not_logged(self, path: str):
         with capture_logs() as logs:
-            response = await _get(LoggingMiddleware(_ok), HEALTHCHECK_PATH)
+            response = await _get(LoggingMiddleware(_ok), path)
 
         assert response.status_code == 200
         assert logs == []
@@ -182,10 +182,11 @@ class TestSecurityMiddleware:
         assert limited.status_code == 429
         assert next_window.status_code == 200
 
-    async def test_healthcheck_is_not_rate_limited(self):
+    @pytest.mark.parametrize("path", ["/up", "/ready"])
+    async def test_probe_is_not_rate_limited(self, path: str):
         app = _secured(rate_limit=FixedWindowRateLimit(1, 60, clock=FakeClock(125.0)))
 
-        statuses = [(await _get(app, HEALTHCHECK_PATH)).status_code for _ in range(3)]
+        statuses = [(await _get(app, path)).status_code for _ in range(3)]
 
         assert statuses == [200, 200, 200]
 

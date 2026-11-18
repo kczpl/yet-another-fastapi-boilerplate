@@ -14,6 +14,7 @@ AUTH_DEPENDENCIES: set[Callable[..., Any]] = set()
 # Routes without an authentication dependency. Each one has the reason.
 PUBLIC_ROUTES = {
     ("GET", "/up"): "Liveness probe.",
+    ("GET", "/ready"): "Readiness probe.",
     ("POST", "/api/v1/items"): "Example CRUD. Add authentication for your product.",
     ("GET", "/api/v1/items"): "Example CRUD. Add authentication for your product.",
     ("GET", "/api/v1/items/{item_id}"): "Example CRUD. Add authentication for your product.",

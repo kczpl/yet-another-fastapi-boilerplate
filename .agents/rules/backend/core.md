@@ -65,11 +65,18 @@ proxy IP and so they share one rate-limit count and one block decision. Do not p
 X-Forwarded-For in the app.
 
 `LoggingMiddleware` clears and binds the log context for each request, propagates X-Request-ID
-and logs one `http_request` event. It skips `/up`. Use static event names and put the values in
-fields. Structlog writes JSON outside development. Do not log secrets, request bodies or prompts.
+and logs one `http_request` event. It skips the probes. Use static event names and put the
+values in fields. Structlog writes JSON outside development. Do not log secrets, request bodies
+or prompts.
 Log ids and counts, never personal data (email addresses, phone numbers, names, user text).
 `tests/architecture/test_log_fields.py` rejects the common field names in `log.*` and
 `bind_context` calls.
+
+## Probes
+
+`/up` is the liveness probe: it makes no database call. `/ready` is the readiness probe: it runs
+`SELECT 1` and answers 503 without the database. Point a restart check at `/up` only, so that a
+database outage does not restart each process. Both probes skip the log and the rate limit.
 
 ## Time
 
