@@ -12,8 +12,9 @@ Both queues are declared durable; unrouted tasks go to default and unknown queue
 A single worker consuming both queues does not isolate latency; use separate consumers when needed.
 
 Tasks in `registry.py` are thin wrappers around `run_service()`. Declare them with
-`@celery_task(...)`, never with a raw `@celery.task`. Import service classes inside task bodies
-to avoid import cycles and parent-process client initialization.
+`@celery_task(...)`, not with a raw `@celery.task`: the helper gives them the `BaseTask` type.
+Import service classes inside task bodies to avoid import cycles and parent-process client
+initialization.
 
 Feature code awaits the async `enqueue_*` helpers of `workers/enqueue.py` after the commit.
 A Celery publish blocks, so the helpers publish in their own thread pool. Tests reject
@@ -21,8 +22,8 @@ A Celery publish blocks, so the helpers publish in their own thread pool. Tests 
 Task arguments are JSON values. The enqueue helper sends `str(item_id)`, and the task parses it
 with `UUID(item_id)`. Services take typed values and return a TypedDict.
 
-Each task sets `recovered_by` to the beat task that finds its lost work. A cron names itself.
-`recovered_by=None` needs a reason in `TASKS_WITHOUT_RECOVERY`. A test checks both.
+A message can still be lost. Before you add a task, decide what finds its lost work: a beat
+task, a new request from the client, or nothing when the loss does no harm.
 
 ## Lifecycle
 
@@ -53,5 +54,6 @@ Beat runs the example daily cleanup and one heartbeat per queue. Keep one beat s
 deployment. Beat entries use `crontab`, not `timedelta`: Sentry Crons reads cron expressions.
 Tasks do not store results; add a result backend only when a workflow reads them.
 
-Read the [workers reference](../../references/workers.md) before you change time limits, the
-visibility timeout, Redis persistence, beat persistence or the worker settings of Compose.
+Read the [workers reference](../../references/workers.md) before you add a recovery task or
+change time limits, the visibility timeout, Redis persistence, beat persistence or the worker
+settings of Compose.

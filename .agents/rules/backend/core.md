@@ -73,9 +73,10 @@ Log ids and counts, never personal data (email addresses, phone numbers, names, 
 
 ## Time
 
-Use `utc_now()` for timestamps. Use `business_today()` for the calendar day of the business:
-servers run in UTC, so a UTC date is the wrong day near midnight. `BUSINESS_TIMEZONE` sets the
-zone. Ruff `DTZ` rejects `datetime.now()` without a zone and `date.today()`.
+Use `utc_now()` for timestamps. Servers run in UTC, so a UTC date is the wrong calendar day near
+midnight for a business in another zone. Convert with the zone of the business, for example
+`utc_now().astimezone(ZoneInfo(...)).date()`. Ruff `DTZ` rejects a naive `datetime.now()` and
+`date.today()`.
 
 ## Settings
 

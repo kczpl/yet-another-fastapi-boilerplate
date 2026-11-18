@@ -38,7 +38,10 @@ schedule state and the publish are not atomic. Sentry monitors the beat tasks on
 ## Lost work
 
 Late ACKs and `task_reject_on_worker_lost` redeliver a task after a crash. A message can still
-be lost, for example when Redis loses data. Each task therefore names a beat task that finds
-its lost work (`recovered_by`), or `TASKS_WITHOUT_RECOVERY` gives the reason why it needs none.
-A recovery task selects the rows in a pending state that are older than the longest delivery
-time and enqueues them again. It must be idempotent, like every task.
+be lost, for example when Redis loses data. Decide for each task what finds its lost work:
+
+- A cron runs again at the next interval.
+- The client can request the work again. The summary example uses this.
+- When a lost task loses data, add a beat task that recovers it. It selects the rows in a
+  pending state that are older than the longest delivery time and enqueues them again. It
+  must be idempotent, like every task.

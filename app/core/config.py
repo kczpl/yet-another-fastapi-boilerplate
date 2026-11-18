@@ -1,7 +1,6 @@
 from typing import Literal, Self
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, IPvAnyNetwork, field_validator, model_validator
+from pydantic import Field, IPvAnyNetwork, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ################################################################################
@@ -13,22 +12,11 @@ class Config(BaseSettings):
     VERSION: str = "0.0.1"
     ENVIRONMENT: Literal["development", "local", "staging", "production"] = "development"
     LOG_LEVEL: str = "INFO"
-    # The calendar day of the business. Servers run in UTC. An IANA name, for example "Europe/Warsaw".
-    BUSINESS_TIMEZONE: str = "UTC"
 
     SENTRY_DSN: str | None = None
     SENTRY_RELEASE: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
-
-    @field_validator("BUSINESS_TIMEZONE")
-    @classmethod
-    def validate_timezone(cls, value: str) -> str:
-        try:
-            ZoneInfo(value)
-        except (ZoneInfoNotFoundError, ValueError) as error:
-            raise ValueError(f"unknown timezone {value!r}") from error
-        return value
 
     @property
     def is_production(self) -> bool:
