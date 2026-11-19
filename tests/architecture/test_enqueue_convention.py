@@ -68,7 +68,7 @@ def test_workers_import_no_features_at_module_level():
         for path in sorted((APP_DIR / "workers").glob("*.py"))
         for line in _feature_imports(path.read_text())
     ]
-    assert offenders == []
+    assert offenders == [], "Import the feature service inside the task body."
 
 
 def _helper_problems(source: str) -> list[str]:
@@ -98,4 +98,6 @@ def test_finds_sync_and_misnamed_helpers(source: str, expected: list[str]):
 
 
 def test_public_enqueue_helpers_are_async():
-    assert _helper_problems(ENQUEUE_MODULE.read_text()) == []
+    assert _helper_problems(ENQUEUE_MODULE.read_text()) == [], (
+        "Make each public helper of enqueue.py async and name it enqueue_*. Start other names with _."
+    )
