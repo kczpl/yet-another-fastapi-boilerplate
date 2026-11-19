@@ -42,14 +42,35 @@ dev = [
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "ASYNC", "N", "T20", "S", "DTZ", "T10", "PT", "PIE", "RET"]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "ASYNC", "N", "T20", "S", "DTZ", "T10", "PT", "PIE", "RET", "PGH", "TID251", "TID252"]
 ignore = [
     "E501",  # line-too-long — formatting handled by ruff format
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]  # pytest assertions
+# Tests assert and build their own sessions and engines. Scripts are command-line tools.
+"tests/**" = ["S101", "TID251"]
+"scripts/**" = ["TID251"]
 "app/core/exceptions.py" = ["N818"]  # APIException mirrors HTTPException naming
+# Each wrapper below is the one module that may use its banned API.
+"app/core/db.py" = ["TID251"]
+"app/core/logger.py" = ["TID251"]
+"app/core/agents.py" = ["TID251"]
+"app/workers/registry.py" = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+# The import direction test reads absolute imports only.
+ban-relative-imports = "all"
+
+# Each banned API has one wrapper. The message names it. `just gates` ignores noqa comments.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"app.core.db.SessionLocal".msg = "Use the get_db dependency in a route or session_scope() in a worker. They own the transaction."
+"structlog.get_logger".msg = "Use log from app.core.logger. The log field test reads only the log calls."
+"logging.getLogger".msg = "Use log from app.core.logger. The log field test reads only the log calls."
+"pydantic_ai.models.bedrock.BedrockConverseModel".msg = "Use get_model() from app.core.agents. It makes one provider per process, after the fork."
+"pydantic_ai.providers.bedrock.BedrockProvider".msg = "Use get_model() from app.core.agents. It makes one provider per process, after the fork."
+"app.workers.celery.celery.task".msg = "Use @celery_task(...) from app.workers.registry. It gives the task the BaseTask type."
+"celery.shared_task".msg = "Use @celery_task(...) from app.workers.registry. It gives the task the BaseTask type."
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
