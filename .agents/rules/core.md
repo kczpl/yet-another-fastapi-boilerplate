@@ -28,8 +28,9 @@ the check for each step before you start.
 
 ## 5. Run the checks before you call it done
 
-`just ci` runs `ruff format --check`, `ruff check`, `pyright`, `complexipy` and `pytest`. Run it
-after each finished unit of work: a feature slice, before a commit and before a PR.
+`just ci` runs `ruff format --check`, `ruff check`, `just gates`, `pyright`, `complexipy` and
+`pytest`. Run it after each finished unit of work: a feature slice, before a commit and before a
+PR. Run `just gates` after each edit.
 
 - Pyright covers `tests/` too. The complexity check covers `tests/` and `alembic/`.
 - Never make a check pass by silencing it. A `# type: ignore`, a deleted assertion or a narrowed

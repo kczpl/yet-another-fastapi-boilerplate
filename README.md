@@ -116,6 +116,7 @@ just lint                           # non-mutating Ruff format/lint checks
 just ruff                           # format and autofix
 just types                          # Pyright
 just complexity                     # complexipy: cognitive complexity <= 10/function
+just gates                          # wrapper bans and guard tests, about 1 s, no database
 just test                           # waits for PostgreSQL 18, applies migrations, tests
 just ci                             # all local checks
 just agents-check                   # agent guidance only (just test also runs it)
@@ -128,10 +129,14 @@ and imports runtime images without development dependencies. Pyright checks all
 modules in the AI variant. Dependabot updates the actions and `uv.lock` each week.
 
 Tests use migrated PostgreSQL schemas and rolled-back outer transactions with session
-savepoints. `tests/architecture/` reads the source and enforces the layer rules: repositories
-never commit, `app/core` and `app/utils` import no upper layer, only the `enqueue_*` helpers
+savepoints. Details: [the testing rule](.agents/rules/backend/testing.md).
+
+Project gates check the conventions in the code, so agents and reviewers do not repeat a
+correction. Ruff bans keep `SessionLocal`, the loggers, the Bedrock model and the Celery task
+decorator behind their wrappers; no `# noqa` switches them off. `tests/architecture/` reads the
+source: imports go down the layers, repositories never commit, only the `enqueue_*` helpers
 publish tasks, models follow the database conventions, each route authenticates or is listed
-as public, and logs carry no personal data. Details: [the testing rule](.agents/rules/backend/testing.md).
+as public, and logs carry no personal data. See [gates](.agents/references/gates.md).
 
 ## Deployment
 
