@@ -40,8 +40,20 @@ FastAPI runs the dependencies before it validates the body, so these errors come
 
 ## Tests for each tenant-scoped endpoint
 
+Write the access tests as a [gate](gates.md): one test reads the route table and checks each
+route with `{tenant_id}` in the path. A new route then gets its access tests without a manual
+step.
+
+- The route has the tenant access dependency. Use the dependency walk of
+  `tests/architecture/test_route_inventory.py`.
 - An unauthenticated request gets 401, not 403.
 - A user without access to the tenant gets 403.
-- A member of tenant A cannot read or change a resource of tenant B.
+- Assert the exact error key, not only the status. Another check (for example accepted terms)
+  can answer 403 first. Then no request reaches the access check, and the status hides it.
+- A `tenant_id` field in the query or the body fails the test. The rules above forbid it.
+
+Write these tests by hand for each endpoint:
+
+- A member of tenant A cannot read or change a resource of tenant B (404).
 - Each allowed role succeeds. Each other role gets 403.
 - A query test adds a row of another tenant and asserts that the result does not contain it.

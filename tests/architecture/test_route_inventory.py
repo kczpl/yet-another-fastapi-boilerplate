@@ -69,4 +69,6 @@ def test_each_route_authenticates_or_is_listed_as_public():
 def test_public_routes_exist():
     present = {(method, path) for method, path, _ in _routes(api)}
     optional = AI_ROUTES if find_spec("pydantic_ai") is None else set()
-    assert set(PUBLIC_ROUTES) - present - optional == set()
+    assert set(PUBLIC_ROUTES) - present - optional == set(), (
+        "Remove the routes that no longer exist from PUBLIC_ROUTES."
+    )
