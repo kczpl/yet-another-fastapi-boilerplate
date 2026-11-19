@@ -52,7 +52,8 @@ git rm -q app/core/agents.py .agents/rules/backend/ai-agents.md
 - `app/core/config.py`: remove `AIConfig` and `ai_config`.
 - `.env.example`: remove the AWS, Bedrock and `AI_REQUEST_TIMEOUT` lines and the `APP_EXTRA=ai`
   example.
-- `pyproject.toml`: remove the `ai` extra. Then run `uv lock` and `just setup`.
+- `pyproject.toml`: remove the `ai` extra, the two Bedrock entries of `banned-api` and the
+  `app/core/agents.py` line of `per-file-ignores`. Then run `uv lock` and `just setup`.
 - `.github/workflows/ci.yml`: remove `ai` from the matrix. Run the type check in the `workers`
   variant, because pyright needs all modules installed.
 - `tests/conftest.py`: remove the `pydantic_ai` block. Pyright cannot resolve its import

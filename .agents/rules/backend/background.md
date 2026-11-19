@@ -13,6 +13,7 @@ A single worker consuming both queues does not isolate latency; use separate con
 
 Tasks in `registry.py` are thin wrappers around `run_service()`. Declare them with
 `@celery_task(...)`, not with a raw `@celery.task`: the helper gives them the `BaseTask` type.
+Ruff TID251 rejects a raw `@celery.task` and `shared_task`.
 Import service classes inside task bodies to avoid import cycles and parent-process client
 initialization.
 

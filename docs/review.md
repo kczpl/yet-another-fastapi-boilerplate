@@ -197,6 +197,27 @@ helpera i migracji.
 | Obraz | Dwa etapy: w obrazie runtime nie ma uv. `--timeout-graceful-shutdown 25` kończy żądania przed SIGKILL platformy. |
 | Dependabot | Cotygodniowe grupy dla GitHub Actions (piny SHA) i `uv.lock`, z 7-dniowym cooldownem. |
 
+### Gates
+
+Numonis zamienił powtarzane poprawki z review na gates: skrypty i testy, które sprawdzają jedną
+konwencję i w komunikacie mówią, jak naprawić. Templatka miała już testy-strażników; ta runda
+dodała bany wrapperów, zamknęła dwie luki i opisała, kiedy dodać nowy gate.
+
+| Obszar | Zmiana i powód |
+|---|---|
+| Bany wrapperów | Ruff TID251: `SessionLocal` tylko w `app/core/db.py`, `structlog.get_logger` i `logging.getLogger` tylko w `app/core/logger.py`, `BedrockConverseModel` i `BedrockProvider` tylko w `app/core/agents.py`, `@celery.task` i `shared_task` tylko w `app/workers/registry.py`. Wyjątek to `per-file-ignores` wrappera; `tests/` i `scripts/` są zwolnione. `datetime.now` pominięto, bo pilnuje go DTZ. |
+| Bez wyłączania komentarzem | `just gates` i CI uruchamiają TID251 i TID252 z `--ignore-noqa` i z głównym configiem, więc `# noqa` ani zagnieżdżony `ruff.toml` nie wyłączają banu. `PGH` odrzuca gołe `# noqa` i `# type: ignore`. |
+| Luka w logach | `test_log_fields` czyta tylko wywołania `log.*`. `logger = structlog.get_logger()` w feature omijało test danych osobowych. Ban loggerów zamyka tę drogę. |
+| Kierunek importów | `from app import features` przechodziło przez test. Helper liczy teraz też importowane nazwy, a TID252 zakazuje importów względnych. Nowe kierunki: wspólne `services/` i `integrations/` nie importują feature'ów, a w feature importy idą w dół: routes → dependencies → services → repository → models. Obecny kod nie miał naruszeń. |
+| `just gates` | Bany i testy-strażnicy w około 1 s, bez Dockera i bazy. Agent uruchamia je po każdej edycji; `just ci` też. |
+| Komunikaty | Każdy test-strażnik mówi w asercji, jak naprawić. |
+| Dokumentacja | `.agents/references/gates.md`: kiedy pisać gate, lista gates, zasady (komunikat z poprawką, brak wyłączania komentarzem, samotest, stare naruszenia naprawione w tym samym PR) i gdzie dodać nowy. `auth-and-tenancy.md` opisuje test dostępu tenantów jako gate: dokładny klucz błędu, nie tylko status, bo w Numonis 403 przychodziło z innego sprawdzenia. |
+
+Świadomie pominięto: hook PostToolUse/Stop z Numonis (`numonis_checks.py` ze stanem sesji, ok.
+600 linii z testami) i osobny skrypt `gates.py` z wyjściem JSON dla hooka. Templatka nie ma
+`.claude/` ani `.codex/`, a `just gates` daje szybką pętlę bez hooka. Pominięto też gates
+frontendu, ratchet baseline'ów (templatka nie ma baseline'u) i test tekstów błędów en/es.
+
 ## Weryfikacja pierwotnego przeglądu (PR #1)
 
 - Python 3.14.7 i PostgreSQL 18: pełny wariant AI **51 testów**, bez wywołań modelu.

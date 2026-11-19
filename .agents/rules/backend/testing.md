@@ -41,9 +41,9 @@ A flaky test is a defect. Fix the cause; do not add retries or longer waits.
 
 `tests/architecture/` reads the source or the model metadata. It enforces transaction
 ownership, the import direction, the enqueue helpers, the model conventions, the public route
-list and the log fields. `tests/migrations/test_heads.py` keeps one Alembic head. Fix a new
-offender; do not add an allowlist. A new scan gets a self-test with bad input, so that it
-cannot pass because it matches nothing.
+list and the log fields. `tests/migrations/test_heads.py` keeps one Alembic head. These tests
+are gates (`just gates`, [gates](../../references/gates.md)). Fix a new offender. A new scan
+gets a self-test with bad input, so that it cannot pass because it matches nothing.
 
 ## Layout and fixtures
 
