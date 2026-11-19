@@ -79,4 +79,4 @@ def test_finds_each_convention_problem():
 
 @pytest.mark.parametrize("table", Base.metadata.sorted_tables, ids=lambda table: table.name)
 def test_model_follows_the_database_conventions(table: Table):
-    assert _table_problems(table) == []
+    assert _table_problems(table) == [], "Follow the model conventions of .agents/rules/backend/database.md."

@@ -12,8 +12,10 @@ def python_files(root: Path) -> Iterator[Path]:
 
 
 def imported_modules(node: ast.AST) -> list[str]:
+    # Each imported name counts too, so `from app import features` gives app.features.
+    # Ruff TID252 bans relative imports.
     if isinstance(node, ast.Import):
         return [alias.name for alias in node.names]
-    if isinstance(node, ast.ImportFrom) and node.level == 0:
-        return [node.module or ""]
+    if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+        return [node.module, *(f"{node.module}.{alias.name}" for alias in node.names)]
     return []
