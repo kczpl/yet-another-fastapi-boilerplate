@@ -53,8 +53,12 @@ ASGI entry point. It wraps `api` with CORS, request logging and `SecurityMiddlew
    `app/workers/enqueue.py`. Decide what finds its lost work (`background.md`).
 7. Mirror the tests in `tests/features/<domain>/`. Put the factories in `tests/factories/`.
 
-`tests/architecture/` enforces the layer rules. When one of its tests fails, fix the code. Do
-not add an allowlist.
+## Project gates
+
+A gate checks one project convention: a ruff ban or a test in `tests/architecture/`. Run
+`just gates` after each edit. It takes about 1 s and needs no database. Each finding names its
+fix: fix the code. No comment switches a gate off. Turn a correction that comes back into a new
+gate: read [gates](.agents/references/gates.md).
 
 ## Commands
 
@@ -64,7 +68,7 @@ not add an allowlist.
   prints recent logs and stops. `just seed` loads demo data. `just down` stops the stack.
 - `uv sync --locked` installs only the core. `just app`, `just workers` and `just cron` run the
   installed environment on the host without a resync.
-- `just ruff` formats and fixes. `just ci` runs `lint`, `types`, `complexity` and `test`.
+- `just ruff` formats and fixes. `just ci` runs `lint`, `gates`, `types`, `complexity` and `test`.
 - `just test` starts PostgreSQL 18 in Docker. Tests apply the migrations and never mock the DB.
 - `just makemigration "description"` and `just migrate` use the settings from env and `.env`.
 - `just agents-check` checks the agent guidance only. `just test` also runs it.

@@ -13,6 +13,7 @@ in `app/core/agents.py`.
 
 - Create Agent/provider/model on first use via cached factories, never at module import.
   Caching is safe for prefork only when the parent hasn't constructed the client.
+  Ruff TID251 allows `BedrockConverseModel` and `BedrockProvider` only in `app/core/agents.py`.
 - Standard AWS credential chain; configure BEDROCK_REGION and a BEDROCK_MODEL inference profile
   enabled for the account. `BedrockConverseModel` uses the Converse API. Check the Bedrock model
   docs before you change the model. The default EU profile of Sonnet 5.5 supports Converse on

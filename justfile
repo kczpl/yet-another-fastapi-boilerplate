@@ -76,7 +76,13 @@ test *flags="":
   docker compose up postgres-test -d --wait
   uv run --no-sync pytest {{ flags }}
 
-ci: lint types complexity test
+# Project gates without a database, in about 2 s: the wrapper bans and the guard tests.
+# No noqa comment and no nested ruff config switches the bans off. Run it after each edit.
+gates:
+  uv run --no-sync ruff check --config pyproject.toml --select TID251,TID252 --ignore-noqa --no-cache --quiet
+  uv run --no-sync pytest tests/architecture tests/core/test_error_registry.py tests/migrations/test_heads.py -q
+
+ci: lint gates types complexity test
 
 # Print the scoped rules for the files you will change. Without files, print the whole map.
 rules *paths:

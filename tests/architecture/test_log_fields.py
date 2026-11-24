@@ -62,4 +62,4 @@ def test_logs_carry_no_secrets_or_personal_data():
         for path in python_files(APP_DIR)
         for line, field in _forbidden_fields(path.read_text())
     ]
-    assert offenders == []
+    assert offenders == [], "Log an id or a count instead of the field. Never log personal data or secrets."

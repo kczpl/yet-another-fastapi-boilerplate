@@ -56,6 +56,8 @@ jobs:
         run: |
           uv run --no-sync ruff format --check
           uv run --no-sync ruff check
+      - name: Wrapper bans without noqa
+        run: uv run --no-sync ruff check --config pyproject.toml --select TID251,TID252 --ignore-noqa --no-cache
       - name: Type-check all optional modules
         if: matrix.variant == 'ai'
         run: uv run --no-sync pyright

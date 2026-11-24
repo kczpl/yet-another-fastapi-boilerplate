@@ -30,6 +30,13 @@ Use ORM entities, dataclasses or TypedDict for domain results. Pydantic validate
 output and external data. Do not convert an entity to a response schema and back to a dict
 before FastAPI validates the response again.
 
+## Project gates
+
+`just gates` runs the ruff wrapper bans (TID251) and `tests/architecture/` without a database.
+Each ban names its wrapper: `get_db` or `session_scope()`, `log`, `get_model()` and
+`@celery_task(...)`. A new wrapper of a library gets a `banned-api` entry in `pyproject.toml`.
+Read [gates](../../references/gates.md) before you add or change a gate.
+
 ## Errors and responses
 
 `ERRORS` in `app/core/errors.py` maps short literal keys to i18n keys. `APIException` rejects an
